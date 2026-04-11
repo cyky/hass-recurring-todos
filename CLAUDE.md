@@ -1,7 +1,7 @@
 # Recurring Todos — HA Custom Integration
 
 ## Purpose
-Track recurring and one-off tasks/chores in Home Assistant. Extends HA's native Todo platform with iCal RRULE recurrence, full completion history, overdue detection, and mobile push notifications.
+Track recurring/one-off tasks in Home Assistant. Extends HA Todo platform w/ iCal RRULE recurrence, completion history, overdue detection, mobile push.
 
 ## Domain
 `recurring_todos` — prefixes all services, events, storage keys.
@@ -32,18 +32,18 @@ custom_components/recurring_todos/
 - `uid`, `name`, `description`, `status` (TodoItemStatus), `due_date`, `rrule` (iCal string), `completion_history` (list of dicts, never pruned), `created_at`
 
 ## Key Patterns
-- One config entry = one task list. Multiple lists supported.
-- Runtime data stored in `hass.data[DOMAIN][entry.entry_id]`
-- Recurring tasks: on completion → record history → calculate next due from RRULE → reset to NEEDS_ACTION
-- One-off tasks (rrule=None): stay completed
-- Storage version 1, keyed by config entry ID
+- 1 config entry = 1 task list. Multiple lists supported.
+- Runtime data: `hass.data[DOMAIN][entry.entry_id]`
+- Recurring: complete → record history → next due from RRULE → reset NEEDS_ACTION
+- One-off (rrule=None): stay completed
+- Storage v1, keyed by config entry ID
 
 ## Services
 - `recurring_todos.complete_task` — mark done, trigger recurrence
 - `recurring_todos.snooze_task` — push due date forward N days
 
 ## Events
-- `recurring_todos_overdue` — fired when tasks become overdue
+- `recurring_todos_overdue` — fired when tasks overdue
 
 ## Development
 ```bash
@@ -58,7 +58,7 @@ python -c "import ast; ast.parse(open('custom_components/recurring_todos/model.p
 ```
 
 ## Task Tracker
-See `features.json` for implementation status and dependency graph.
+See `features.json` for status/dependency graph.
 
 ## Conventions
 - Python 3.12+, `from __future__ import annotations`
