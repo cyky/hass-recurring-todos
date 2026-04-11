@@ -6,3 +6,5 @@ DOMAIN = "recurring_todos"
 PLATFORMS = [Platform.TODO]
 STORAGE_KEY = f"{DOMAIN}.storage"
 STORAGE_VERSION = 1
+EVENT_OVERDUE = f"{DOMAIN}_overdue"
+OVERDUE_CHECK_INTERVAL = 300  # seconds

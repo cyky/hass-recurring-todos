@@ -55,7 +55,7 @@
       "id": "overdue-detection",
       "name": "Overdue Detection",
       "description": "Add is_overdue computed property to TaskItem (due_date < today and status != COMPLETED). Add extra_state_attributes on todo entity exposing overdue_count and overdue_tasks list. Fire recurring_todos_overdue event via hass.bus.async_fire when tasks become overdue, usable as automation trigger.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["recurrence-logic"]
     },
     {

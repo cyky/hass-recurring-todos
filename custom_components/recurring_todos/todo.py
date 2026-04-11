@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from homeassistant.components.todo import (
     TodoItem,
@@ -13,8 +15,9 @@ from homeassistant.components.todo import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 
-from .const import DOMAIN
+from .const import DOMAIN, EVENT_OVERDUE, OVERDUE_CHECK_INTERVAL
 from .model import TaskItem
 from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
@@ -44,6 +47,7 @@ class RecurringTodosListEntity(TodoListEntity):
         self._entry = entry
         self._attr_name = entry.title
         self._attr_unique_id = entry.entry_id
+        self._unsub_overdue_check: Callable[[], None] | None = None
 
     @property
     def todo_items(self) -> list[TodoItem]:
@@ -58,6 +62,65 @@ class RecurringTodosListEntity(TodoListEntity):
             )
             for task in self._store.get_items(self._entry.entry_id)
         ]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose overdue task information as entity attributes."""
+        tasks = self._store.get_items(self._entry.entry_id)
+        overdue = [t for t in tasks if t.is_overdue]
+        return {
+            "overdue_count": len(overdue),
+            "overdue_tasks": [
+                {
+                    "uid": t.uid,
+                    "name": t.name,
+                    "due_date": t.due_date.isoformat() if t.due_date else None,
+                }
+                for t in overdue
+            ],
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Start periodic overdue check when entity is added."""
+        self._unsub_overdue_check = async_track_time_interval(
+            self.hass,
+            self._async_check_overdue,
+            timedelta(seconds=OVERDUE_CHECK_INTERVAL),
+        )
+        await self._async_check_overdue()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel periodic overdue check when entity is removed."""
+        if self._unsub_overdue_check is not None:
+            self._unsub_overdue_check()
+            self._unsub_overdue_check = None
+
+    async def _async_check_overdue(self, _now: datetime | None = None) -> None:
+        """Check for overdue tasks and fire events."""
+        tasks = self._store.get_items(self._entry.entry_id)
+        overdue = [t for t in tasks if t.is_overdue]
+
+        if not overdue:
+            return
+
+        self.hass.bus.async_fire(
+            EVENT_OVERDUE,
+            {
+                "entity_id": self.entity_id,
+                "entry_id": self._entry.entry_id,
+                "overdue_tasks": [
+                    {
+                        "uid": t.uid,
+                        "name": t.name,
+                        "due_date": t.due_date.isoformat(),
+                        "days_overdue": (date.today() - t.due_date).days,
+                    }
+                    for t in overdue
+                ],
+                "overdue_count": len(overdue),
+            },
+        )
+        self.async_write_ha_state()
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Create a new task from a TodoItem."""

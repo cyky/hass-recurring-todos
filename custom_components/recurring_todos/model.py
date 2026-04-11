@@ -22,6 +22,13 @@ class TaskItem:
     completion_history: list[dict] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
+    @property
+    def is_overdue(self) -> bool:
+        """Return True if the task is past due and not completed."""
+        if self.due_date is None:
+            return False
+        return self.due_date < date.today() and self.status != TodoItemStatus.COMPLETED
+
     def to_dict(self) -> dict:
         """Serialize to dict for storage."""
         return {
