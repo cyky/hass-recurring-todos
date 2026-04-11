@@ -41,7 +41,7 @@
       "id": "todo-entity",
       "name": "Todo Entity",
       "description": "Implement todo.py extending TodoListEntity. Set supported_features to CREATE_TODO_ITEM | UPDATE_TODO_ITEM | DELETE_TODO_ITEM. Implement async_create_todo_item, async_update_todo_item, async_delete_todo_items. Map TaskItem model to TodoItem for the todo_items property. Entity name from config entry title.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["integration-setup"]
     },
     {
