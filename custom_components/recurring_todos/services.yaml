@@ -1,0 +1,47 @@
+complete_task:
+  name: Complete task
+  description: Mark a task as completed, triggering recurrence if configured.
+  fields:
+    entity_id:
+      name: Entity
+      description: The todo list entity containing the task.
+      required: true
+      selector:
+        entity:
+          integration: recurring_todos
+          domain: todo
+    task_uid:
+      name: Task UID
+      description: The unique identifier of the task to complete.
+      required: true
+      selector:
+        text:
+
+snooze_task:
+  name: Snooze task
+  description: Push a task's due date forward by a number of days.
+  fields:
+    entity_id:
+      name: Entity
+      description: The todo list entity containing the task.
+      required: true
+      selector:
+        entity:
+          integration: recurring_todos
+          domain: todo
+    task_uid:
+      name: Task UID
+      description: The unique identifier of the task to snooze.
+      required: true
+      selector:
+        text:
+    days:
+      name: Days
+      description: Number of days to snooze the task.
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box

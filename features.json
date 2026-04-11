@@ -62,7 +62,7 @@
       "id": "custom-services",
       "name": "Custom Services",
       "description": "Register HA services in __init__.py: recurring_todos.complete_task (mark task done, trigger recurrence), recurring_todos.snooze_task (push due date forward by N days). Define service schemas in services.yaml with entity_id and task_uid selectors. No assign service yet (future feature).",
-      "completed": false,
+      "completed": true,
       "depends_on": ["recurrence-logic"]
     },
     {
