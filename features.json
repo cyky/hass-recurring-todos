@@ -125,7 +125,7 @@
       "id": "docs-claude-md",
       "name": "CLAUDE.md Project Guide",
       "description": "Create CLAUDE.md in project root: project purpose, directory layout, how to run tests, how to install for development, coding conventions used, key dependencies and why. This is the entry point an LLM reads first before any code. Keep under 100 lines.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["project-scaffold"]
     }
   ]
