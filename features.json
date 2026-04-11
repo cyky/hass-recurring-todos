@@ -1,25 +1,25 @@
 {
-  "project": "family_tasks",
-  "description": "Home Assistant custom integration for recurring family task/chore tracking",
+  "project": "recurring_todos",
+  "description": "Home Assistant custom integration for recurring task/chore tracking",
   "tasks": [
     {
       "id": "project-scaffold",
       "name": "Project Scaffold",
-      "description": "Create custom_components/family_tasks/ directory structure with manifest.json (domain, name, version, dependencies including python-dateutil, iot_class, integration_type), __init__.py (module docstring), and const.py (DOMAIN, PLATFORMS, storage keys).",
-      "completed": false,
+      "description": "Create custom_components/recurring_todos/ directory structure with manifest.json (domain, name, version, dependencies including python-dateutil, iot_class, integration_type), __init__.py (module docstring), and const.py (DOMAIN, PLATFORMS, storage keys).",
+      "completed": true,
       "depends_on": []
     },
     {
       "id": "data-model",
       "name": "Data Model",
       "description": "Define TaskItem dataclass in model.py with fields: uid (str, uuid4), name (str), description (str|None), status (TodoItemStatus), due_date (date|None), rrule (str|None, iCal RRULE for recurring tasks, None for one-off), completion_history (list of dicts with completed_at datetime and completed_by str|None), created_at (datetime). Include serialization to/from dict for storage.",
-      "completed": false,
+      "completed": true,
       "depends_on": []
     },
     {
       "id": "storage-layer",
       "name": "Storage Layer",
-      "description": "Implement store.py using homeassistant.helpers.storage.Store for .storage/family_tasks persistence. Storage version 1 with migration support. Methods: async_load, async_save, async_add_item, async_update_item, async_remove_item. Data keyed by config entry ID to support multiple task lists.",
+      "description": "Implement store.py using homeassistant.helpers.storage.Store for .storage/recurring_todos persistence. Storage version 1 with migration support. Methods: async_load, async_save, async_add_item, async_update_item, async_remove_item. Data keyed by config entry ID to support multiple task lists.",
       "completed": false,
       "depends_on": ["project-scaffold", "data-model"]
     },
@@ -33,7 +33,7 @@
     {
       "id": "integration-setup",
       "name": "Integration Setup",
-      "description": "Implement async_setup_entry and async_unload_entry in __init__.py. Initialize store, forward setup to todo platform. Store reference in hass.data[DOMAIN][entry.entry_id]. Handle config entry updates and removal with proper cleanup.",
+      "description": "Implement async_setup_entry and async_unload_entry in __init__.py. Initialize store, forward setup to todo platform. Store reference in hass.data[DOMAIN][entry.entry_id] (DOMAIN = recurring_todos). Handle config entry updates and removal with proper cleanup.",
       "completed": false,
       "depends_on": ["storage-layer", "config-flow"]
     },
@@ -54,14 +54,14 @@
     {
       "id": "overdue-detection",
       "name": "Overdue Detection",
-      "description": "Add is_overdue computed property to TaskItem (due_date < today and status != COMPLETED). Add extra_state_attributes on todo entity exposing overdue_count and overdue_tasks list. Fire family_tasks_overdue event via hass.bus.async_fire when tasks become overdue, usable as automation trigger.",
+      "description": "Add is_overdue computed property to TaskItem (due_date < today and status != COMPLETED). Add extra_state_attributes on todo entity exposing overdue_count and overdue_tasks list. Fire recurring_todos_overdue event via hass.bus.async_fire when tasks become overdue, usable as automation trigger.",
       "completed": false,
       "depends_on": ["recurrence-logic"]
     },
     {
       "id": "custom-services",
       "name": "Custom Services",
-      "description": "Register HA services in __init__.py: family_tasks.complete_task (mark task done, trigger recurrence), family_tasks.snooze_task (push due date forward by N days). Define service schemas in services.yaml with entity_id and task_uid selectors. No assign service yet (future feature).",
+      "description": "Register HA services in __init__.py: recurring_todos.complete_task (mark task done, trigger recurrence), recurring_todos.snooze_task (push due date forward by N days). Define service schemas in services.yaml with entity_id and task_uid selectors. No assign service yet (future feature).",
       "completed": false,
       "depends_on": ["recurrence-logic"]
     },
@@ -75,7 +75,7 @@
     {
       "id": "lovelace-card",
       "name": "Lovelace Card",
-      "description": "Custom Lovelace card in JS (family-tasks-card.js). Features: task list with due dates and overdue highlighting, add/edit task form with recurrence UI (frequency dropdown: none/daily/weekly/monthly/yearly, interval number input, day-of-week multi-select for weekly), generates RRULE string from UI selections, calls family_tasks services. Completion history view per task. Register as custom card resource.",
+      "description": "Custom Lovelace card in JS (recurring-todos-card.js). Features: task list with due dates and overdue highlighting, add/edit task form with recurrence UI (frequency dropdown: none/daily/weekly/monthly/yearly, interval number input, day-of-week multi-select for weekly), generates RRULE string from UI selections, calls recurring_todos services. Completion history view per task. Register as custom card resource.",
       "completed": false,
       "depends_on": ["todo-entity", "custom-services"]
     },

@@ -1,6 +1,6 @@
-# Family Tasks - Home Assistant Integration
+# Recurring Todos - Home Assistant Integration
 
-A custom Home Assistant integration for tracking recurring and one-off family tasks/chores. Built on HA's native To-Do platform with added recurrence, overdue detection, and mobile notifications.
+A custom Home Assistant integration for tracking recurring and one-off tasks/chores. Built on HA's native To-Do platform with added recurrence, overdue detection, and mobile notifications.
 
 ## Features
 
@@ -17,17 +17,17 @@ A custom Home Assistant integration for tracking recurring and one-off family ta
 
 ### HACS (Recommended)
 1. Add this repository as a custom repository in HACS
-2. Search for "Family Tasks" and install
+2. Search for "Recurring Todos" and install
 3. Restart Home Assistant
 
 ### Manual
-1. Copy `custom_components/family_tasks/` to your HA `custom_components/` directory
+1. Copy `custom_components/recurring_todos/` to your HA `custom_components/` directory
 2. Restart Home Assistant
 
 ## Setup
 
 1. Go to **Settings > Devices & Services > Add Integration**
-2. Search for **Family Tasks**
+2. Search for **Recurring Todos**
 3. Enter a name for your task list (e.g. "Household Chores")
 4. Configure notification devices and timing in the integration options
 
@@ -38,16 +38,16 @@ Tasks appear in HA's built-in **To-Do** panel. Use the custom Lovelace card for 
 ### Lovelace Card
 Add to your dashboard:
 ```yaml
-type: custom:family-tasks-card
+type: custom:recurring-todos-card
 entity: todo.household_chores
 ```
 
 ### Services
-- `family_tasks.complete_task` - Mark a task complete (triggers recurrence)
-- `family_tasks.snooze_task` - Push due date forward by N days
+- `recurring_todos.complete_task` - Mark a task complete (triggers recurrence)
+- `recurring_todos.snooze_task` - Push due date forward by N days
 
 ### Automations
-Use the `family_tasks_overdue` event as a trigger for custom automation flows.
+Use the `recurring_todos_overdue` event as a trigger for custom automation flows.
 
 ## Documentation
 
