@@ -9,5 +9,25 @@
         }
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Task List Settings",
+        "description": "Configure notification and recurrence defaults.",
+        "data": {
+          "default_recurrence": "Default recurrence (RRULE)",
+          "notification_lead_time_hours": "Notification lead time (hours)",
+          "overdue_reminder_interval_hours": "Overdue reminder interval (hours)",
+          "notify_devices": "Notification devices"
+        },
+        "data_description": {
+          "default_recurrence": "iCal RRULE template applied to new tasks (e.g. FREQ=WEEKLY;BYDAY=MO)",
+          "notification_lead_time_hours": "Hours before due date to send the first notification",
+          "overdue_reminder_interval_hours": "Hours between repeated overdue reminders",
+          "notify_devices": "Mobile devices to receive push notifications"
+        }
+      }
+    }
   }
 }

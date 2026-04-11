@@ -69,7 +69,7 @@
       "id": "options-flow",
       "name": "Options Flow",
       "description": "Add OptionsFlowHandler to config_flow.py for editing list settings after creation. Options: default_recurrence (RRULE template), notification_lead_time_hours (int, how far before due date to notify), overdue_reminder_interval_hours (int, how often to re-notify for overdue tasks), notify_devices (multi-select of available mobile_app notify services).",
-      "completed": false,
+      "completed": true,
       "depends_on": ["config-flow", "todo-entity"]
     },
     {
