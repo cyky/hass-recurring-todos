@@ -90,7 +90,7 @@
       "id": "hacs-packaging",
       "name": "HACS Packaging",
       "description": "Add hacs.json with name, render_readme, homeassistant minimum version. Add info.md for HACS integration page. Ensure manifest.json has version field. Structure repo for HACS default repository submission.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["project-scaffold"]
     },
     {
