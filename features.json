@@ -76,7 +76,7 @@
       "id": "lovelace-card",
       "name": "Lovelace Card",
       "description": "Custom Lovelace card in JS (recurring-todos-card.js). Features: task list with due dates and overdue highlighting, add/edit task form with recurrence UI (frequency dropdown: none/daily/weekly/monthly/yearly, interval number input, day-of-week multi-select for weekly), generates RRULE string from UI selections, calls recurring_todos services. Completion history view per task. Register as custom card resource.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["todo-entity", "custom-services"]
     },
     {
