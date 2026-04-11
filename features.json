@@ -48,7 +48,7 @@
       "id": "recurrence-logic",
       "name": "Recurrence Engine",
       "description": "Implement recurrence.py using python-dateutil rrulestr parser. Function calculate_next_due(rrule_string, last_completed_date) returns next occurrence date. When async_update_todo_item detects status change to COMPLETED on a recurring task: append {completed_at, completed_by} to completion_history (full history, never pruned), calculate next due date from RRULE, reset status to NEEDS_ACTION with new due date. One-off tasks just stay completed.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["todo-entity"]
     },
     {

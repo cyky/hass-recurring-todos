@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+
 from homeassistant.components.todo import (
     TodoItem,
     TodoItemStatus,
@@ -14,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .model import TaskItem
+from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
 
 
@@ -73,9 +76,25 @@ class RecurringTodosListEntity(TodoListEntity):
         if existing is None:
             raise ValueError(f"Task {item.uid} not found")
         existing.name = item.summary
-        existing.status = item.status
         existing.description = item.description
         existing.due_date = item.due
+
+        completing = (
+            item.status == TodoItemStatus.COMPLETED
+            and existing.status != TodoItemStatus.COMPLETED
+        )
+        if completing and existing.rrule:
+            existing.completion_history.append(
+                {"completed_at": datetime.now().isoformat()}
+            )
+            next_due = calculate_next_due(
+                existing.rrule, existing.due_date or date.today()
+            )
+            existing.due_date = next_due
+            existing.status = TodoItemStatus.NEEDS_ACTION
+        else:
+            existing.status = item.status
+
         await self._store.async_update_item(self._entry.entry_id, existing)
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
