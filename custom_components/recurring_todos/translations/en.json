@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Task List",
+        "description": "Create a new recurring task list.",
+        "data": {
+          "name": "List name"
+        }
+      }
+    }
+  }
+}
