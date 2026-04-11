@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS, SERVICE_COMPLETE_TASK, SERVICE_SNOOZE_TASK
+from .notify import NotificationChecker
 from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
 
@@ -109,12 +110,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             schema=SERVICE_SCHEMA_SNOOZE,
         )
 
+    checker = NotificationChecker(hass, entry)
+    unsub = await checker.start()
+    hass.data[DOMAIN][f"{entry.entry_id}_notify_unsub"] = unsub
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    unsub = hass.data[DOMAIN].pop(f"{entry.entry_id}_notify_unsub", None)
+    if unsub is not None:
+        unsub()
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)

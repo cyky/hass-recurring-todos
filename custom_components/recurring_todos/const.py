@@ -8,6 +8,7 @@ STORAGE_KEY = f"{DOMAIN}.storage"
 STORAGE_VERSION = 1
 EVENT_OVERDUE = f"{DOMAIN}_overdue"
 OVERDUE_CHECK_INTERVAL = 300  # seconds
+NOTIFICATION_CHECK_INTERVAL = 1800  # seconds (30 minutes)
 SERVICE_COMPLETE_TASK = "complete_task"
 SERVICE_SNOOZE_TASK = "snooze_task"
 

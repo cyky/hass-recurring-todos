@@ -83,7 +83,7 @@
       "id": "notification-engine",
       "name": "Notification Engine",
       "description": "Implement notify.py with periodic checker using async_track_time_interval (every 30 min). Checks all task lists for due/overdue tasks. Sends push notifications via notify.mobile_app_* services to devices configured in options flow. Notification content includes task name, due date, and how overdue. Respects lead_time and reminder_interval from options. Tracks last_notified per task to avoid spam.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["overdue-detection", "options-flow"]
     },
     {
