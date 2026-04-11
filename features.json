@@ -20,21 +20,21 @@
       "id": "storage-layer",
       "name": "Storage Layer",
       "description": "Implement store.py using homeassistant.helpers.storage.Store for .storage/recurring_todos persistence. Storage version 1 with migration support. Methods: async_load, async_save, async_add_item, async_update_item, async_remove_item. Data keyed by config entry ID to support multiple task lists.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["project-scaffold", "data-model"]
     },
     {
       "id": "config-flow",
       "name": "Config Flow",
       "description": "Implement config_flow.py using SchemaConfigFlowHandler. User step: single text input for list name (e.g. 'Household Chores'). Creates one config entry per task list. Add strings.json and translations/en.json with flow step titles, field labels, and error messages.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["project-scaffold"]
     },
     {
       "id": "integration-setup",
       "name": "Integration Setup",
       "description": "Implement async_setup_entry and async_unload_entry in __init__.py. Initialize store, forward setup to todo platform. Store reference in hass.data[DOMAIN][entry.entry_id] (DOMAIN = recurring_todos). Handle config entry updates and removal with proper cleanup.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["storage-layer", "config-flow"]
     },
     {
