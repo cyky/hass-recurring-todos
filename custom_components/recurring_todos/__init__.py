@@ -97,16 +97,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = store
 
     if not hass.services.has_service(DOMAIN, SERVICE_COMPLETE_TASK):
+
+        async def handle_complete(call: ServiceCall) -> None:
+            await _async_handle_complete_task(hass, call)
+
+        async def handle_snooze(call: ServiceCall) -> None:
+            await _async_handle_snooze_task(hass, call)
+
         hass.services.async_register(
             DOMAIN,
             SERVICE_COMPLETE_TASK,
-            lambda call: _async_handle_complete_task(hass, call),
+            handle_complete,
             schema=SERVICE_SCHEMA_COMPLETE,
         )
         hass.services.async_register(
             DOMAIN,
             SERVICE_SNOOZE_TASK,
-            lambda call: _async_handle_snooze_task(hass, call),
+            handle_snooze,
             schema=SERVICE_SCHEMA_SNOOZE,
         )
 

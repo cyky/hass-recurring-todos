@@ -122,6 +122,13 @@
       "depends_on": ["custom-services", "notification-engine"]
     },
     {
+      "id": "tests-ha-integration",
+      "name": "HA Integration Tests",
+      "description": "Replace HA shims with pytest-homeassistant-custom-component for real HA runtime fixtures. Add proper integration tests: test_config_flow.py (user step creates entry, options flow saves settings, dynamic notify device list), test_todo.py (entity setup, create/update/delete tasks, completion triggers recurrence, overdue event fires), test_init.py (entry setup/unload lifecycle, service registration/removal, notification checker start/stop), test_notify.py (full _async_check_and_notify with mocked hass services, verify notifications sent to correct devices, rate limiting works end-to-end). Use MockConfigEntry, async_setup_entry fixtures, hass.services mock. Keep existing pure unit tests (recurrence, model) unchanged.",
+      "completed": true,
+      "depends_on": ["tests-backend"]
+    },
+    {
       "id": "docs-claude-md",
       "name": "CLAUDE.md Project Guide",
       "description": "Create CLAUDE.md in project root: project purpose, directory layout, how to run tests, how to install for development, coding conventions used, key dependencies and why. This is the entry point an LLM reads first before any code. Keep under 100 lines.",

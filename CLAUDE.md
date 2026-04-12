@@ -50,7 +50,10 @@ custom_components/recurring_todos/
 # Symlink into HA for dev
 ln -s $(pwd)/custom_components/recurring_todos ~/.homeassistant/custom_components/recurring_todos
 
-# Run tests
+# Run tests (venv required for HA runtime fixtures)
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[test]"
 pytest tests/
 
 # Validate syntax (no HA runtime needed)
