@@ -111,14 +111,14 @@
       "id": "docs-architecture",
       "name": "Architecture Documentation",
       "description": "Create docs/architecture.md: high-level overview of integration structure, module responsibilities (store.py, recurrence.py, todo.py, notify.py, config_flow.py), data flow diagrams (task creation, completion with recurrence, notification cycle), storage schema, and key design decisions. Written for LLM consumption - concise, structured, no prose filler. Include file-to-purpose mapping so an LLM can skip reading source files.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["notification-engine", "lovelace-card"]
     },
     {
       "id": "docs-api-reference",
       "name": "API Reference Documentation",
       "description": "Create docs/api-reference.md: all services with parameter schemas and examples, entity attributes and their types, events fired and their payloads, storage format with version, TaskItem model fields and types, RRULE examples for common patterns (daily, weekdays, biweekly, monthly 1st, quarterly). Structured as quick-lookup tables. LLM can answer user questions from this without reading code.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["custom-services", "notification-engine"]
     },
     {
