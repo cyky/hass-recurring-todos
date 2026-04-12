@@ -34,7 +34,7 @@ async def test_notification_sent_to_devices(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    store = hass.data[DOMAIN][entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     yesterday = date.today() - timedelta(days=1)
     task = TaskItem(name="Overdue chore", due_date=yesterday)
     await store.async_add_item(entry.entry_id, task)
@@ -63,7 +63,7 @@ async def test_no_notification_without_devices(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    store = hass.data[DOMAIN][entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     yesterday = date.today() - timedelta(days=1)
     task = TaskItem(name="Overdue chore", due_date=yesterday)
     await store.async_add_item(entry.entry_id, task)
@@ -93,7 +93,7 @@ async def test_rate_limiting(hass: HomeAssistant):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    store = hass.data[DOMAIN][entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     yesterday = date.today() - timedelta(days=1)
     task = TaskItem(name="Overdue chore", due_date=yesterday)
     await store.async_add_item(entry.entry_id, task)

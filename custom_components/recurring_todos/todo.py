@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.todo import (
@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, EVENT_OVERDUE, OVERDUE_CHECK_INTERVAL
 from .model import TaskItem
@@ -29,7 +30,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the todo platform."""
-    store: RecurringTodosStore = hass.data[DOMAIN][entry.entry_id]
+    store: RecurringTodosStore = hass.data[DOMAIN]["store"]
     async_add_entities([RecurringTodosListEntity(store, entry)])
 
 
@@ -103,6 +104,7 @@ class RecurringTodosListEntity(TodoListEntity):
         if not overdue:
             return
 
+        today = dt_util.now().date()
         self.hass.bus.async_fire(
             EVENT_OVERDUE,
             {
@@ -113,7 +115,7 @@ class RecurringTodosListEntity(TodoListEntity):
                         "uid": t.uid,
                         "name": t.name,
                         "due_date": t.due_date.isoformat(),
-                        "days_overdue": (date.today() - t.due_date).days,
+                        "days_overdue": (today - t.due_date).days,
                     }
                     for t in overdue
                 ],
@@ -131,6 +133,7 @@ class RecurringTodosListEntity(TodoListEntity):
             due_date=item.due,
         )
         await self._store.async_add_item(self._entry.entry_id, task)
+        self.async_write_ha_state()
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update an existing task, preserving rrule and history."""
@@ -148,10 +151,10 @@ class RecurringTodosListEntity(TodoListEntity):
         )
         if completing and existing.rrule:
             existing.completion_history.append(
-                {"completed_at": datetime.now().isoformat()}
+                {"completed_at": dt_util.now().isoformat()}
             )
             next_due = calculate_next_due(
-                existing.rrule, existing.due_date or date.today()
+                existing.rrule, existing.due_date or dt_util.now().date()
             )
             existing.due_date = next_due
             existing.status = TodoItemStatus.NEEDS_ACTION
@@ -159,8 +162,9 @@ class RecurringTodosListEntity(TodoListEntity):
             existing.status = item.status
 
         await self._store.async_update_item(self._entry.entry_id, existing)
+        self.async_write_ha_state()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete tasks by their UIDs."""
-        for uid in uids:
-            await self._store.async_remove_item(self._entry.entry_id, uid)
+        await self._store.async_remove_items(self._entry.entry_id, uids)
+        self.async_write_ha_state()

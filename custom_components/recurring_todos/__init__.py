@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import voluptuous as vol
 
@@ -10,11 +10,16 @@ from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS, SERVICE_COMPLETE_TASK, SERVICE_SNOOZE_TASK
 from .notify import NotificationChecker
 from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
+
+DATA_STORE = "store"
+DATA_ENTRY_IDS = "entry_ids"
+DATA_NOTIFY_UNSUBS = "notify_unsubs"
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
     {
@@ -42,11 +47,11 @@ def _resolve_store(
         raise ValueError(f"Entity {entity_id} not found in registry")
 
     config_entry_id = entry.config_entry_id
-    store = hass.data.get(DOMAIN, {}).get(config_entry_id)
-    if store is None:
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is None:
         raise ValueError(f"No store for config entry {config_entry_id}")
 
-    return store, config_entry_id
+    return domain_data[DATA_STORE], config_entry_id
 
 
 async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -61,10 +66,10 @@ async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) ->
 
     if task.rrule:
         task.completion_history.append(
-            {"completed_at": datetime.now().isoformat()}
+            {"completed_at": dt_util.now().isoformat()}
         )
         task.due_date = calculate_next_due(
-            task.rrule, task.due_date or date.today()
+            task.rrule, task.due_date or dt_util.now().date()
         )
         task.status = TodoItemStatus.NEEDS_ACTION
     else:
@@ -83,7 +88,7 @@ async def _async_handle_snooze_task(hass: HomeAssistant, call: ServiceCall) -> N
     if task is None:
         raise ValueError(f"Task {task_uid} not found")
 
-    task.due_date = (task.due_date or date.today()) + timedelta(
+    task.due_date = (task.due_date or dt_util.now().date()) + timedelta(
         days=call.data["days"]
     )
     await store.async_update_item(entry_id, task)
@@ -91,10 +96,18 @@ async def _async_handle_snooze_task(hass: HomeAssistant, call: ServiceCall) -> N
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Recurring Todos from a config entry."""
-    store = RecurringTodosStore(hass)
-    await store.async_load()
+    domain_data = hass.data.setdefault(DOMAIN, {
+        DATA_STORE: None,
+        DATA_ENTRY_IDS: set(),
+        DATA_NOTIFY_UNSUBS: {},
+    })
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = store
+    if domain_data[DATA_STORE] is None:
+        store = RecurringTodosStore(hass)
+        await store.async_load()
+        domain_data[DATA_STORE] = store
+
+    domain_data[DATA_ENTRY_IDS].add(entry.entry_id)
 
     if not hass.services.has_service(DOMAIN, SERVICE_COMPLETE_TASK):
 
@@ -119,7 +132,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()
-    hass.data[DOMAIN][f"{entry.entry_id}_notify_unsub"] = unsub
+    domain_data[DATA_NOTIFY_UNSUBS][entry.entry_id] = unsub
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -127,21 +140,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unsub = hass.data[DOMAIN].pop(f"{entry.entry_id}_notify_unsub", None)
+    domain_data = hass.data[DOMAIN]
+
+    unsub = domain_data[DATA_NOTIFY_UNSUBS].pop(entry.entry_id, None)
     if unsub is not None:
         unsub()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-        if not hass.data[DOMAIN]:
+        domain_data[DATA_ENTRY_IDS].discard(entry.entry_id)
+        if not domain_data[DATA_ENTRY_IDS]:
             hass.services.async_remove(DOMAIN, SERVICE_COMPLETE_TASK)
             hass.services.async_remove(DOMAIN, SERVICE_SNOOZE_TASK)
+            hass.data.pop(DOMAIN)
     return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove a config entry and its stored data."""
-    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if store is not None:
-        await store.async_remove_entry(entry.entry_id)
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is not None and domain_data[DATA_STORE] is not None:
+        await domain_data[DATA_STORE].async_remove_entry(entry.entry_id)

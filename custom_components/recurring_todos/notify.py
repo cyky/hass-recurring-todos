@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from datetime import date, datetime, timedelta
+from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta
+from typing import Any
 
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_NOTIFICATION_LEAD_TIME_HOURS,
@@ -50,11 +53,14 @@ class NotificationChecker:
         if not devices:
             return
 
-        store = self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+        domain_data = self._hass.data.get(DOMAIN)
+        if domain_data is None:
+            return
+        store = domain_data.get("store")
         if store is None:
             return
 
-        now = datetime.now()
+        now = dt_util.now()
         tasks: list[TaskItem] = store.get_items(self._entry.entry_id)
 
         for task in tasks:
@@ -71,7 +77,7 @@ class NotificationChecker:
         self,
         task: TaskItem,
         now: datetime,
-        options: dict,
+        options: Mapping[str, Any],
     ) -> bool:
         """Determine if a task warrants a notification right now."""
         if task.due_date is None:
@@ -82,7 +88,7 @@ class NotificationChecker:
         lead_time = options.get(CONF_NOTIFICATION_LEAD_TIME_HOURS, 24)
         reminder_interval = options.get(CONF_OVERDUE_REMINDER_INTERVAL_HOURS, 12)
 
-        due_datetime = datetime.combine(task.due_date, datetime.min.time())
+        due_datetime = dt_util.start_of_local_day(task.due_date)
         notify_threshold = due_datetime - timedelta(hours=lead_time)
 
         if now < notify_threshold:
@@ -97,7 +103,7 @@ class NotificationChecker:
     def _build_message(self, task: TaskItem) -> tuple[str, str]:
         """Build notification title and message for a task."""
         title = self._entry.title
-        today = date.today()
+        today = dt_util.now().date()
 
         if task.due_date is None:
             return title, f"{task.name} needs attention"
@@ -131,7 +137,7 @@ class NotificationChecker:
                 device,
                 {"title": title, "message": message},
             )
-        except Exception:
+        except ServiceNotFound:
             _LOGGER.warning(
-                "Failed to send notification to %s", device, exc_info=True
+                "Notification service 'notify.%s' not found", device
             )

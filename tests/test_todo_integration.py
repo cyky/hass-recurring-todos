@@ -24,7 +24,7 @@ async def test_entity_created(hass: HomeAssistant, mock_setup_entry):
 
 async def test_create_and_retrieve_task(hass: HomeAssistant, mock_setup_entry):
     """Test creating a task via the todo platform."""
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
 
     task = TaskItem(name="Do dishes", due_date=date.today())
     await store.async_add_item(mock_setup_entry.entry_id, task)
@@ -36,7 +36,7 @@ async def test_create_and_retrieve_task(hass: HomeAssistant, mock_setup_entry):
 
 async def test_complete_recurring_task(hass: HomeAssistant, mock_setup_entry):
     """Test that completing a recurring task advances the due date."""
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     today = date.today()
 
     task = TaskItem(
@@ -67,7 +67,7 @@ async def test_complete_recurring_task(hass: HomeAssistant, mock_setup_entry):
 
 async def test_complete_oneoff_task(hass: HomeAssistant, mock_setup_entry):
     """Test that completing a one-off task marks it completed."""
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
 
     task = TaskItem(name="One-off", due_date=date.today(), rrule=None)
     await store.async_add_item(mock_setup_entry.entry_id, task)
@@ -89,7 +89,7 @@ async def test_complete_oneoff_task(hass: HomeAssistant, mock_setup_entry):
 
 async def test_snooze_task(hass: HomeAssistant, mock_setup_entry):
     """Test that snoozing a task pushes the due date forward."""
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     today = date.today()
 
     task = TaskItem(name="Snooze me", due_date=today)
@@ -113,7 +113,7 @@ async def test_snooze_task(hass: HomeAssistant, mock_setup_entry):
 
 async def test_delete_task(hass: HomeAssistant, mock_setup_entry):
     """Test deleting a task removes it from the store."""
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
 
     task = TaskItem(name="Delete me")
     await store.async_add_item(mock_setup_entry.entry_id, task)
@@ -127,7 +127,7 @@ async def test_overdue_event_fires(hass: HomeAssistant, mock_setup_entry):
     """Test that the overdue event fires for overdue tasks."""
     from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-    store = hass.data[DOMAIN][mock_setup_entry.entry_id]
+    store = hass.data[DOMAIN]["store"]
     yesterday = date.today() - timedelta(days=1)
 
     task = TaskItem(name="Overdue task", due_date=yesterday)

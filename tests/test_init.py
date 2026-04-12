@@ -18,7 +18,8 @@ async def test_setup_entry_loads(hass: HomeAssistant, mock_setup_entry):
     """Test that async_setup_entry loads successfully."""
     assert mock_setup_entry.state is config_entries.ConfigEntryState.LOADED
     assert DOMAIN in hass.data
-    assert mock_setup_entry.entry_id in hass.data[DOMAIN]
+    assert mock_setup_entry.entry_id in hass.data[DOMAIN]["entry_ids"]
+    assert hass.data[DOMAIN]["store"] is not None
 
 
 async def test_unload_entry(hass: HomeAssistant, mock_setup_entry):
@@ -46,6 +47,6 @@ async def test_notification_checker_unsub_stored(
     hass: HomeAssistant, mock_setup_entry,
 ):
     """Test that notification checker unsub is stored in hass.data."""
-    unsub_key = f"{mock_setup_entry.entry_id}_notify_unsub"
-    assert unsub_key in hass.data[DOMAIN]
-    assert callable(hass.data[DOMAIN][unsub_key])
+    notify_unsubs = hass.data[DOMAIN]["notify_unsubs"]
+    assert mock_setup_entry.entry_id in notify_unsubs
+    assert callable(notify_unsubs[mock_setup_entry.entry_id])

@@ -66,6 +66,15 @@ class RecurringTodosStore:
             ]
             await self.async_save()
 
+    async def async_remove_items(self, entry_id: str, uids: list[str]) -> None:
+        """Remove multiple TaskItems by uid in a single save."""
+        if entry_id in self._data:
+            uid_set = set(uids)
+            self._data[entry_id] = [
+                item for item in self._data[entry_id] if item.uid not in uid_set
+            ]
+            await self.async_save()
+
     async def async_remove_entry(self, entry_id: str) -> None:
         """Remove all data for a config entry and save."""
         if self._data.pop(entry_id, None) is not None:

@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from uuid import uuid4
 
 from homeassistant.components.todo import TodoItemStatus
+from homeassistant.util import dt as dt_util
 
 
 @dataclass
 class TaskItem:
-    """A family task item with optional recurrence."""
+    """A recurring task item with optional recurrence."""
 
     name: str
     uid: str = field(default_factory=lambda: str(uuid4()))
@@ -20,14 +21,17 @@ class TaskItem:
     due_date: date | None = None
     rrule: str | None = None
     completion_history: list[dict] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: dt_util.now().isoformat())
 
     @property
     def is_overdue(self) -> bool:
         """Return True if the task is past due and not completed."""
         if self.due_date is None:
             return False
-        return self.due_date < date.today() and self.status != TodoItemStatus.COMPLETED
+        return (
+            self.due_date < dt_util.now().date()
+            and self.status != TodoItemStatus.COMPLETED
+        )
 
     def to_dict(self) -> dict:
         """Serialize to dict for storage."""
@@ -50,8 +54,12 @@ class TaskItem:
             name=data["name"],
             description=data.get("description"),
             status=TodoItemStatus(data["status"]),
-            due_date=date.fromisoformat(data["due_date"]) if data.get("due_date") else None,
+            due_date=(
+                date.fromisoformat(data["due_date"])
+                if data.get("due_date")
+                else None
+            ),
             rrule=data.get("rrule"),
             completion_history=data.get("completion_history", []),
-            created_at=data.get("created_at", datetime.now().isoformat()),
+            created_at=data.get("created_at", dt_util.now().isoformat()),
         )

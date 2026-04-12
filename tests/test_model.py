@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 from homeassistant.components.todo import TodoItemStatus
 
 from custom_components.recurring_todos.model import TaskItem
+
+_MOCK_TARGET = "custom_components.recurring_todos.model.dt_util"
+
+
+def _mock_now(d: date) -> datetime:
+    """Return a timezone-aware datetime for the given date."""
+    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
 
 
 def test_taskitem_defaults():
@@ -22,16 +29,15 @@ def test_taskitem_defaults():
 
 
 def test_is_overdue_past_due_needs_action():
-    with patch("custom_components.recurring_todos.model.date") as mock_date:
-        mock_date.today.return_value = date(2026, 4, 10)
-        mock_date.fromisoformat = date.fromisoformat
+    with patch(_MOCK_TARGET) as mock_dt:
+        mock_dt.now.return_value = _mock_now(date(2026, 4, 10))
         task = TaskItem(name="T", due_date=date(2026, 4, 9))
         assert task.is_overdue is True
 
 
 def test_is_overdue_past_due_completed():
-    with patch("custom_components.recurring_todos.model.date") as mock_date:
-        mock_date.today.return_value = date(2026, 4, 10)
+    with patch(_MOCK_TARGET) as mock_dt:
+        mock_dt.now.return_value = _mock_now(date(2026, 4, 10))
         task = TaskItem(
             name="T",
             due_date=date(2026, 4, 9),
@@ -41,15 +47,15 @@ def test_is_overdue_past_due_completed():
 
 
 def test_is_overdue_today():
-    with patch("custom_components.recurring_todos.model.date") as mock_date:
-        mock_date.today.return_value = date(2026, 4, 10)
+    with patch(_MOCK_TARGET) as mock_dt:
+        mock_dt.now.return_value = _mock_now(date(2026, 4, 10))
         task = TaskItem(name="T", due_date=date(2026, 4, 10))
         assert task.is_overdue is False
 
 
 def test_is_overdue_future():
-    with patch("custom_components.recurring_todos.model.date") as mock_date:
-        mock_date.today.return_value = date(2026, 4, 10)
+    with patch(_MOCK_TARGET) as mock_dt:
+        mock_dt.now.return_value = _mock_now(date(2026, 4, 10))
         task = TaskItem(name="T", due_date=date(2026, 4, 11))
         assert task.is_overdue is False
 
