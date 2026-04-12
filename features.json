@@ -104,7 +104,7 @@
       "id": "tests-card",
       "name": "Lovelace Card Tests",
       "description": "Basic tests for Lovelace card: RRULE generation from UI selections (frequency + interval + day selections produce correct RRULE strings), card renders task list, overdue tasks highlighted. Can use simple JS test runner.",
-      "completed": false,
+      "completed": true,
       "depends_on": ["lovelace-card"]
     },
     {
