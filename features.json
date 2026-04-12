@@ -97,7 +97,7 @@
       "id": "tests-backend",
       "name": "Backend Tests",
       "description": "Unit tests in tests/ directory: test_recurrence.py (RRULE parsing, next-due calculation for daily/weekly/monthly/custom patterns, edge cases), test_store.py (CRUD operations, persistence, migration), test_todo.py (entity creation, task lifecycle, completion with recurrence), test_config_flow.py (user step, options flow), test_notify.py (notification scheduling, device selection, spam prevention).",
-      "completed": false,
+      "completed": true,
       "depends_on": ["notification-engine"]
     },
     {
