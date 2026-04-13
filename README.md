@@ -41,11 +41,10 @@ A custom Home Assistant integration for tracking recurring and one-off tasks/cho
 
 ### Lovelace card
 
-To use the custom card:
+The integration automatically registers its custom card. Add it to any dashboard:
 
-1. Go to **Settings > Dashboards > Resources**
-2. Add `/local/community/recurring_todos/www/recurring-todos-card.js` as a JavaScript Module
-3. Add the card to a dashboard:
+- **UI mode**: Edit dashboard → Add Card → search "Recurring Todos" → select your entity
+- **YAML mode**:
 
 ```yaml
 type: custom:recurring-todos-card
