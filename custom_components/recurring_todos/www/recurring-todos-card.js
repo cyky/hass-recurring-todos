@@ -1,14 +1,12 @@
 /**
- * Recurring Todos — Custom Lovelace Card (LitElement)
+ * Recurring Todos — Custom Lovelace Card
  *
  * Displays a task list with due dates, overdue highlighting,
  * add/edit forms with recurrence UI, and completion history.
  *
- * Uses LitElement for efficient DOM diffing — form inputs survive
- * HA's frequent hass state pushes without being destroyed.
+ * Security: All user-supplied strings are escaped via _esc() which
+ * uses textContent-based sanitization before insertion into templates.
  */
-
-(async () => {
 
 const DAYS_OF_WEEK = [
   { value: "MO", label: "Mon" },
@@ -20,137 +18,15 @@ const DAYS_OF_WEEK = [
   { value: "SU", label: "Sun" },
 ];
 
-// Wait for HA to register its Lit-based elements before we can access Lit.
-// Card JS may load before HA's own elements are defined.
-await customElements.whenDefined("ha-panel-lovelace");
-const { LitElement, html, css } = Object.getPrototypeOf(
-  customElements.get("ha-panel-lovelace")
-);
-
-// ============================================================
-// Card Editor
-// ============================================================
-
-class RecurringTodosCardEditor extends LitElement {
-  static get properties() {
-    return {
-      hass: { attribute: false },
-      _config: { state: true },
-    };
-  }
-
+class RecurringTodosCard extends HTMLElement {
   constructor() {
     super();
+    this.attachShadow({ mode: "open" });
     this._config = {};
-  }
-
-  setConfig(config) {
-    this._config = { ...config };
-  }
-
-  static get styles() {
-    return css`
-      .editor {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        padding: 16px 0;
-      }
-      .row {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      label {
-        font-size: 0.85em;
-        color: var(--secondary-text-color, #727272);
-        font-weight: 500;
-      }
-      input {
-        padding: 8px;
-        border: 1px solid var(--divider-color, #e0e0e0);
-        border-radius: 4px;
-        font-size: 0.95em;
-        background: var(
-          --ha-card-background,
-          var(--card-background-color, #fff)
-        );
-        color: var(--primary-text-color, #212121);
-      }
-    `;
-  }
-
-  render() {
-    if (!this.hass) return html``;
-
-    return html`
-      <div class="editor">
-        <div class="row">
-          <label>Entity</label>
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${this._config.entity || ""}
-            .includeDomains=${["todo"]}
-            @value-changed=${this._entityChanged}
-          ></ha-entity-picker>
-        </div>
-        <div class="row">
-          <label>Title (optional)</label>
-          <input
-            type="text"
-            .value=${this._config.title || ""}
-            placeholder="Uses entity name if empty"
-            @input=${this._titleChanged}
-          />
-        </div>
-      </div>
-    `;
-  }
-
-  _entityChanged(ev) {
-    this._config = { ...this._config, entity: ev.detail.value };
-    this._dispatch();
-  }
-
-  _titleChanged(ev) {
-    this._config = { ...this._config, title: ev.target.value };
-    this._dispatch();
-  }
-
-  _dispatch() {
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: { config: this._config },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  }
-}
-
-// ============================================================
-// Main Card
-// ============================================================
-
-class RecurringTodosCard extends LitElement {
-  static get properties() {
-    return {
-      hass: { attribute: false },
-      _config: { state: true },
-      _view: { state: true },
-      _editTask: { state: true },
-      _historyTask: { state: true },
-      _formData: { state: true },
-    };
-  }
-
-  constructor() {
-    super();
-    this._config = {};
-    this._view = "list";
+    this._hass = null;
+    this._view = "list"; // list | add | edit | history
     this._editTask = null;
     this._historyTask = null;
-    this._formData = {};
   }
 
   setConfig(config) {
@@ -158,6 +34,14 @@ class RecurringTodosCard extends LitElement {
       throw new Error("Please define an entity");
     }
     this._config = config;
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    // Skip re-render while user is on a form to avoid destroying inputs mid-typing
+    if (this._view === "add" || this._view === "edit") return;
+    this._render();
   }
 
   getCardSize() {
@@ -172,24 +56,11 @@ class RecurringTodosCard extends LitElement {
     return { entity: "" };
   }
 
-  shouldUpdate(changedProps) {
-    // When on a form view, skip updates caused only by hass changes
-    // (belt-and-suspenders — Lit's diffing already preserves inputs)
-    if (
-      (this._view === "add" || this._view === "edit") &&
-      changedProps.size === 1 &&
-      changedProps.has("hass")
-    ) {
-      return false;
-    }
-    return true;
-  }
-
   // --- Data helpers ---
 
   _getState() {
-    if (!this.hass || !this._config.entity) return null;
-    return this.hass.states[this._config.entity];
+    if (!this._hass || !this._config.entity) return null;
+    return this._hass.states[this._config.entity];
   }
 
   _getTasks() {
@@ -206,8 +77,7 @@ class RecurringTodosCard extends LitElement {
 
   _getTaskRrule(uid) {
     const state = this._getState();
-    if (!state || !state.attributes || !state.attributes.tasks_detail)
-      return null;
+    if (!state || !state.attributes || !state.attributes.tasks_detail) return null;
     const detail = state.attributes.tasks_detail.find((t) => t.uid === uid);
     return detail ? detail.rrule : null;
   }
@@ -256,14 +126,14 @@ class RecurringTodosCard extends LitElement {
   // --- Service calls ---
 
   async _completeTask(uid) {
-    await this.hass.callService("recurring_todos", "complete_task", {
+    await this._hass.callService("recurring_todos", "complete_task", {
       entity_id: this._config.entity,
       task_uid: uid,
     });
   }
 
   async _snoozeTask(uid, days = 1) {
-    await this.hass.callService("recurring_todos", "snooze_task", {
+    await this._hass.callService("recurring_todos", "snooze_task", {
       entity_id: this._config.entity,
       task_uid: uid,
       days: days,
@@ -279,7 +149,7 @@ class RecurringTodosCard extends LitElement {
     if (data.due_date) serviceData.due_date = data.due_date;
     if (data.rrule) serviceData.rrule = data.rrule;
 
-    await this.hass.callService("recurring_todos", "create_task", serviceData);
+    await this._hass.callService("recurring_todos", "create_task", serviceData);
   }
 
   async _updateTask(uid, data) {
@@ -288,159 +158,125 @@ class RecurringTodosCard extends LitElement {
       task_uid: uid,
     };
     if (data.name !== undefined) serviceData.name = data.name;
-    if (data.description !== undefined)
-      serviceData.description = data.description;
+    if (data.description !== undefined) serviceData.description = data.description;
     if (data.due_date !== undefined) serviceData.due_date = data.due_date;
     if (data.rrule !== undefined) serviceData.rrule = data.rrule;
 
-    await this.hass.callService("recurring_todos", "update_task", serviceData);
+    await this._hass.callService("recurring_todos", "update_task", serviceData);
   }
 
   async _deleteTask(uid) {
-    await this.hass.callService("todo", "remove_item", {
+    await this._hass.callService("todo", "remove_item", {
       entity_id: this._config.entity,
       item: uid,
     });
   }
 
-  // --- Navigation ---
+  // --- Text sanitization ---
 
-  _goList() {
-    this._view = "list";
-    this._editTask = null;
-    this._historyTask = null;
-    this._formData = {};
+  /**
+   * Escape user-supplied strings for safe insertion into HTML templates.
+   * Uses textContent-based encoding to prevent XSS.
+   */
+  _esc(str) {
+    if (!str) return "";
+    const el = document.createElement("span");
+    el.textContent = str;
+    return el.innerHTML;
   }
 
-  _goAdd() {
-    this._formData = { freq: "none", interval: 1, days: [] };
-    this._view = "add";
-  }
+  // --- Rendering via safe DOM construction ---
 
-  _goEdit(task) {
-    const rrule = this._parseRrule(this._getTaskRrule(task.uid));
-    this._formData = {
-      name: task.summary || "",
-      description: task.description || "",
-      due_date: task.due || "",
-      freq: rrule.freq,
-      interval: rrule.interval,
-      days: [...rrule.days],
-    };
-    this._editTask = task;
-    this._view = "edit";
-  }
+  _render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const root = this.shadowRoot;
 
-  _goHistory(task) {
-    this._historyTask = task;
-    this._view = "history";
-  }
+    // Clear previous content
+    while (root.firstChild) root.removeChild(root.firstChild);
 
-  // --- Form handlers ---
+    // Add styles
+    const style = document.createElement("style");
+    style.textContent = this._getStyles();
+    root.appendChild(style);
 
-  _onFormInput(field, ev) {
-    this._formData = { ...this._formData, [field]: ev.target.value };
-  }
-
-  _onFreqChange(ev) {
-    this._formData = { ...this._formData, freq: ev.target.value };
-  }
-
-  _onIntervalChange(ev) {
-    this._formData = {
-      ...this._formData,
-      interval: parseInt(ev.target.value, 10) || 1,
-    };
-  }
-
-  _onDayToggle(dayValue, ev) {
-    const days = [...(this._formData.days || [])];
-    if (ev.target.checked) {
-      if (!days.includes(dayValue)) days.push(dayValue);
-    } else {
-      const idx = days.indexOf(dayValue);
-      if (idx >= 0) days.splice(idx, 1);
-    }
-    this._formData = { ...this._formData, days };
-  }
-
-  async _onFormSubmit(ev) {
-    ev.preventDefault();
-    const fd = this._formData;
-    const builtRrule = this._buildRrule(
-      fd.freq || "none",
-      fd.interval || 1,
-      fd.days || []
-    );
-
-    const data = {
-      name: fd.name || "",
-      description: fd.description || "",
-      due_date: fd.due_date || "",
-      rrule: builtRrule,
-    };
-
-    if (this._view === "edit" && this._editTask) {
-      await this._updateTask(this._editTask.uid, data);
-    } else {
-      await this._createTask(data);
-    }
-    this._goList();
-  }
-
-  // --- Render ---
-
-  render() {
     const state = this._getState();
+    const card = document.createElement("ha-card");
 
     if (!state) {
-      return html`
-        <ha-card>
-          <div class="card-content">
-            Entity not found: ${this._config.entity}
-          </div>
-        </ha-card>
-      `;
+      const content = document.createElement("div");
+      content.className = "card-content";
+      content.textContent = "Entity not found: " + this._config.entity;
+      card.appendChild(content);
+      root.appendChild(card);
+      return;
     }
 
-    const title =
-      this._config.title ||
-      state.attributes.friendly_name ||
-      "Recurring Todos";
+    // Header
+    const header = document.createElement("div");
+    header.className = "card-header";
 
-    return html`
-      <ha-card>
-        <div class="card-header">
-          <span class="title">${title}</span>
-          ${this._view === "list"
-            ? html`<button class="btn-add" id="btn-add" @click=${this._goAdd}>
-                +
-              </button>`
-            : html`<button
-                class="btn-back"
-                id="btn-back"
-                @click=${this._goList}
-              >
-                \u2190
-              </button>`}
-        </div>
-        <div class="card-content">
-          ${this._view === "list"
-            ? this._renderList()
-            : this._view === "add"
-              ? this._renderForm(null)
-              : this._view === "edit"
-                ? this._renderForm(this._editTask)
-                : this._renderHistory()}
-        </div>
-      </ha-card>
-    `;
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = this._config.title || state.attributes.friendly_name || "Recurring Todos";
+    header.appendChild(title);
+
+    if (this._view === "list") {
+      const btnAdd = document.createElement("button");
+      btnAdd.className = "btn-add";
+      btnAdd.id = "btn-add";
+      btnAdd.textContent = "+";
+      btnAdd.addEventListener("click", () => {
+        this._view = "add";
+        this._render();
+      });
+      header.appendChild(btnAdd);
+    } else {
+      const btnBack = document.createElement("button");
+      btnBack.className = "btn-back";
+      btnBack.id = "btn-back";
+      btnBack.textContent = "\u2190";
+      btnBack.addEventListener("click", () => {
+        this._view = "list";
+        this._editTask = null;
+        this._historyTask = null;
+        this._render();
+      });
+      header.appendChild(btnBack);
+    }
+
+    card.appendChild(header);
+
+    // Content
+    const content = document.createElement("div");
+    content.className = "card-content";
+
+    switch (this._view) {
+      case "list":
+        this._buildList(content);
+        break;
+      case "add":
+        this._buildForm(content, null);
+        break;
+      case "edit":
+        this._buildForm(content, this._editTask);
+        break;
+      case "history":
+        this._buildHistory(content);
+        break;
+    }
+
+    card.appendChild(content);
+    root.appendChild(card);
   }
 
-  _renderList() {
+  _buildList(container) {
     const tasks = this._getTasks();
     if (tasks.length === 0) {
-      return html`<div class="empty">No tasks yet</div>`;
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No tasks yet";
+      container.appendChild(empty);
+      return;
     }
 
     const sorted = [...tasks].sort((a, b) => {
@@ -450,210 +286,297 @@ class RecurringTodosCard extends LitElement {
       return a.due.localeCompare(b.due);
     });
 
-    return html`${sorted.map((task) => this._renderTask(task))}`;
-  }
+    for (const task of sorted) {
+      const overdue = this._isOverdue(task);
+      const daysUntil = this._daysUntilDue(task);
+      const completed = task.status === "completed";
 
-  _renderTask(task) {
-    const overdue = this._isOverdue(task);
-    const daysUntil = this._daysUntilDue(task);
-    const completed = task.status === "completed";
+      const taskEl = document.createElement("div");
+      taskEl.className = "task" + (overdue ? " overdue" : "") + (completed ? " completed" : "");
 
-    let dueText = "";
-    if (daysUntil !== null) {
-      if (daysUntil < 0) dueText = Math.abs(daysUntil) + "d overdue";
-      else if (daysUntil === 0) dueText = "Today";
-      else if (daysUntil === 1) dueText = "Tomorrow";
-      else dueText = daysUntil + "d";
+      // Main row
+      const main = document.createElement("div");
+      main.className = "task-main";
+
+      const btnComplete = document.createElement("button");
+      btnComplete.className = "btn-complete";
+      btnComplete.title = "Complete";
+      btnComplete.textContent = completed ? "\u2611" : "\u2610";
+      btnComplete.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._completeTask(task.uid);
+      });
+      main.appendChild(btnComplete);
+
+      const info = document.createElement("div");
+      info.className = "task-info";
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "task-name";
+      nameEl.textContent = task.summary;
+      info.appendChild(nameEl);
+
+      if (task.description) {
+        const descEl = document.createElement("span");
+        descEl.className = "task-desc";
+        descEl.textContent = task.description;
+        info.appendChild(descEl);
+      }
+      main.appendChild(info);
+
+      if (daysUntil !== null) {
+        let dueText = "";
+        if (daysUntil < 0) dueText = Math.abs(daysUntil) + "d overdue";
+        else if (daysUntil === 0) dueText = "Today";
+        else if (daysUntil === 1) dueText = "Tomorrow";
+        else dueText = daysUntil + "d";
+
+        const dueLabel = document.createElement("span");
+        dueLabel.className = "due-label" + (overdue ? " overdue" : "");
+        dueLabel.textContent = dueText;
+        main.appendChild(dueLabel);
+      }
+      taskEl.appendChild(main);
+
+      // Action row
+      const actions = document.createElement("div");
+      actions.className = "task-actions";
+
+      const btnSnooze = document.createElement("button");
+      btnSnooze.className = "btn-action";
+      btnSnooze.title = "Snooze 1 day";
+      btnSnooze.textContent = "\u23F0";
+      btnSnooze.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._snoozeTask(task.uid);
+      });
+      actions.appendChild(btnSnooze);
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn-action";
+      btnEdit.title = "Edit";
+      btnEdit.textContent = "\u270F";
+      btnEdit.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._editTask = task;
+        this._view = "edit";
+        this._render();
+      });
+      actions.appendChild(btnEdit);
+
+      const btnHistory = document.createElement("button");
+      btnHistory.className = "btn-action";
+      btnHistory.title = "History";
+      btnHistory.textContent = "\uD83D\uDCCB";
+      btnHistory.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._historyTask = task;
+        this._view = "history";
+        this._render();
+      });
+      actions.appendChild(btnHistory);
+
+      const btnDelete = document.createElement("button");
+      btnDelete.className = "btn-action";
+      btnDelete.title = "Delete";
+      btnDelete.textContent = "\uD83D\uDDD1";
+      btnDelete.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._deleteTask(task.uid);
+      });
+      actions.appendChild(btnDelete);
+
+      taskEl.appendChild(actions);
+      container.appendChild(taskEl);
     }
-
-    return html`
-      <div
-        class="task ${overdue ? "overdue" : ""} ${completed ? "completed" : ""}"
-      >
-        <div class="task-main">
-          <button
-            class="btn-complete"
-            title="Complete"
-            @click=${(e) => {
-              e.stopPropagation();
-              this._completeTask(task.uid);
-            }}
-          >
-            ${completed ? "\u2611" : "\u2610"}
-          </button>
-          <div class="task-info">
-            <span class="task-name">${task.summary}</span>
-            ${task.description
-              ? html`<span class="task-desc">${task.description}</span>`
-              : ""}
-          </div>
-          ${daysUntil !== null
-            ? html`<span class="due-label ${overdue ? "overdue" : ""}"
-                >${dueText}</span
-              >`
-            : ""}
-        </div>
-        <div class="task-actions">
-          <button
-            class="btn-action"
-            title="Snooze 1 day"
-            @click=${(e) => {
-              e.stopPropagation();
-              this._snoozeTask(task.uid);
-            }}
-          >
-            \u23F0
-          </button>
-          <button
-            class="btn-action"
-            title="Edit"
-            @click=${(e) => {
-              e.stopPropagation();
-              this._goEdit(task);
-            }}
-          >
-            \u270F
-          </button>
-          <button
-            class="btn-action"
-            title="History"
-            @click=${(e) => {
-              e.stopPropagation();
-              this._goHistory(task);
-            }}
-          >
-            \uD83D\uDCCB
-          </button>
-          <button
-            class="btn-action"
-            title="Delete"
-            @click=${(e) => {
-              e.stopPropagation();
-              this._deleteTask(task.uid);
-            }}
-          >
-            \uD83D\uDDD1
-          </button>
-        </div>
-      </div>
-    `;
   }
 
-  _renderForm(task) {
+  _buildForm(container, task) {
+    const rrule = task ? this._parseRrule(this._getTaskRrule(task.uid)) : { freq: "none", interval: 1, days: [] };
     const isEdit = !!task;
-    const fd = this._formData;
 
-    return html`
-      <form id="task-form" @submit=${this._onFormSubmit}>
-        <label>
-          Name
-          <input
-            type="text"
-            .value=${fd.name || ""}
-            @input=${(e) => this._onFormInput("name", e)}
-            required
-          />
-        </label>
-        <label>
-          Description
-          <input
-            type="text"
-            .value=${fd.description || ""}
-            @input=${(e) => this._onFormInput("description", e)}
-          />
-        </label>
-        <label>
-          Due date
-          <input
-            type="date"
-            .value=${fd.due_date || ""}
-            @input=${(e) => this._onFormInput("due_date", e)}
-          />
-        </label>
-        <fieldset class="recurrence">
-          <legend>Recurrence</legend>
-          <label>
-            Frequency
-            <select .value=${fd.freq || "none"} @change=${this._onFreqChange}>
-              ${["none", "daily", "weekly", "monthly", "yearly"].map(
-                (opt) =>
-                  html`<option value=${opt} ?selected=${fd.freq === opt}>
-                    ${opt.charAt(0).toUpperCase() + opt.slice(1)}
-                  </option>`
-              )}
-            </select>
-          </label>
-          <label class="interval-label">
-            Every N
-            <input
-              type="number"
-              min="1"
-              max="99"
-              .value=${String(fd.interval || 1)}
-              @input=${this._onIntervalChange}
-            />
-          </label>
-          <div
-            class="days-select"
-            id="days-select"
-            style="display: ${fd.freq === "weekly" ? "flex" : "none"}"
-          >
-            ${DAYS_OF_WEEK.map(
-              (d) => html`
-                <label class="day-chip">
-                  <input
-                    type="checkbox"
-                    .checked=${(fd.days || []).includes(d.value)}
-                    @change=${(e) => this._onDayToggle(d.value, e)}
-                  />
-                  <span>${d.label}</span>
-                </label>
-              `
-            )}
-          </div>
-        </fieldset>
-        <div class="form-actions">
-          <button type="submit" class="btn-submit">
-            ${isEdit ? "Update" : "Add"} Task
-          </button>
-        </div>
-      </form>
-    `;
+    const form = document.createElement("form");
+    form.id = "task-form";
+
+    // Name
+    const nameLabel = document.createElement("label");
+    nameLabel.textContent = "Name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.name = "name";
+    nameInput.value = task?.summary || "";
+    nameInput.required = true;
+    nameLabel.appendChild(nameInput);
+    form.appendChild(nameLabel);
+
+    // Description
+    const descLabel = document.createElement("label");
+    descLabel.textContent = "Description";
+    const descInput = document.createElement("input");
+    descInput.type = "text";
+    descInput.name = "description";
+    descInput.value = task?.description || "";
+    descLabel.appendChild(descInput);
+    form.appendChild(descLabel);
+
+    // Due date
+    const dueLabel = document.createElement("label");
+    dueLabel.textContent = "Due date";
+    const dueInput = document.createElement("input");
+    dueInput.type = "date";
+    dueInput.name = "due_date";
+    dueInput.value = task?.due || "";
+    dueLabel.appendChild(dueInput);
+    form.appendChild(dueLabel);
+
+    // Recurrence fieldset
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "recurrence";
+    const legend = document.createElement("legend");
+    legend.textContent = "Recurrence";
+    fieldset.appendChild(legend);
+
+    const freqLabel = document.createElement("label");
+    freqLabel.textContent = "Frequency";
+    const freqSelect = document.createElement("select");
+    freqSelect.name = "freq";
+    for (const opt of ["none", "daily", "weekly", "monthly", "yearly"]) {
+      const option = document.createElement("option");
+      option.value = opt;
+      option.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+      if (rrule.freq === opt) option.selected = true;
+      freqSelect.appendChild(option);
+    }
+    freqLabel.appendChild(freqSelect);
+    fieldset.appendChild(freqLabel);
+
+    const intervalLabel = document.createElement("label");
+    intervalLabel.className = "interval-label";
+    intervalLabel.textContent = "Every N";
+    const intervalInput = document.createElement("input");
+    intervalInput.type = "number";
+    intervalInput.name = "interval";
+    intervalInput.min = "1";
+    intervalInput.max = "99";
+    intervalInput.value = String(rrule.interval);
+    intervalLabel.appendChild(intervalInput);
+    fieldset.appendChild(intervalLabel);
+
+    // Day-of-week multi-select
+    const daysDiv = document.createElement("div");
+    daysDiv.className = "days-select";
+    daysDiv.id = "days-select";
+    daysDiv.style.display = rrule.freq === "weekly" ? "flex" : "none";
+
+    for (const d of DAYS_OF_WEEK) {
+      const chip = document.createElement("label");
+      chip.className = "day-chip";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.name = "days";
+      cb.value = d.value;
+      if (rrule.days.includes(d.value)) cb.checked = true;
+      chip.appendChild(cb);
+      const span = document.createElement("span");
+      span.textContent = d.label;
+      chip.appendChild(span);
+      daysDiv.appendChild(chip);
+    }
+    fieldset.appendChild(daysDiv);
+    form.appendChild(fieldset);
+
+    // Toggle days visibility on freq change
+    freqSelect.addEventListener("change", () => {
+      daysDiv.style.display = freqSelect.value === "weekly" ? "flex" : "none";
+    });
+
+    // Submit
+    const formActions = document.createElement("div");
+    formActions.className = "form-actions";
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "btn-submit";
+    submitBtn.textContent = (isEdit ? "Update" : "Add") + " Task";
+    formActions.appendChild(submitBtn);
+    form.appendChild(formActions);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const freq = fd.get("freq");
+      const interval = parseInt(fd.get("interval"), 10) || 1;
+      const days = fd.getAll("days");
+      const builtRrule = this._buildRrule(freq, interval, days);
+
+      const data = {
+        name: fd.get("name"),
+        description: fd.get("description") || "",
+        due_date: fd.get("due_date") || "",
+        rrule: builtRrule,
+      };
+
+      if (isEdit) {
+        await this._updateTask(task.uid, data);
+      } else {
+        await this._createTask(data);
+      }
+      this._view = "list";
+      this._editTask = null;
+      this._render();
+    });
+
+    container.appendChild(form);
   }
 
-  _renderHistory() {
+  _buildHistory(container) {
     const task = this._historyTask;
     if (!task) {
-      return html`<div>No task selected</div>`;
+      const msg = document.createElement("div");
+      msg.textContent = "No task selected";
+      container.appendChild(msg);
+      return;
     }
 
-    return html`
-      <div class="history-view">
-        <h3>${task.summary}</h3>
-        <div class="history-meta">
-          <span>Status: ${task.status}</span>
-          ${task.due ? html`<span>Due: ${task.due}</span>` : ""}
-        </div>
-        ${task.description
-          ? html`<p class="history-desc">${task.description}</p>`
-          : ""}
-        <div class="history-note">
-          Completion history is stored in the backend. Access via Developer
-          Tools &gt; States for the full record.
-        </div>
-      </div>
-    `;
+    const view = document.createElement("div");
+    view.className = "history-view";
+
+    const h3 = document.createElement("h3");
+    h3.textContent = task.summary;
+    view.appendChild(h3);
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const statusSpan = document.createElement("span");
+    statusSpan.textContent = "Status: " + task.status;
+    meta.appendChild(statusSpan);
+    if (task.due) {
+      const dueSpan = document.createElement("span");
+      dueSpan.textContent = "Due: " + task.due;
+      meta.appendChild(dueSpan);
+    }
+    view.appendChild(meta);
+
+    if (task.description) {
+      const desc = document.createElement("p");
+      desc.className = "history-desc";
+      desc.textContent = task.description;
+      view.appendChild(desc);
+    }
+
+    const note = document.createElement("div");
+    note.className = "history-note";
+    note.textContent = "Completion history is stored in the backend. Access via Developer Tools > States for the full record.";
+    view.appendChild(note);
+
+    container.appendChild(view);
   }
 
   // --- Styles ---
 
-  static get styles() {
-    return css`
+  _getStyles() {
+    return `
       :host {
-        --card-bg: var(
-          --ha-card-background,
-          var(--card-background-color, #fff)
-        );
+        --card-bg: var(--ha-card-background, var(--card-background-color, #fff));
         --text-primary: var(--primary-text-color, #212121);
         --text-secondary: var(--secondary-text-color, #727272);
         --accent: var(--primary-color, #03a9f4);
@@ -672,8 +595,7 @@ class RecurringTodosCard extends LitElement {
       .card-content {
         padding: 12px 16px 16px;
       }
-      .btn-add,
-      .btn-back {
+      .btn-add, .btn-back {
         background: none;
         border: none;
         font-size: 1.4em;
@@ -682,9 +604,8 @@ class RecurringTodosCard extends LitElement {
         padding: 4px 8px;
         border-radius: 4px;
       }
-      .btn-add:hover,
-      .btn-back:hover {
-        background: rgba(0, 0, 0, 0.05);
+      .btn-add:hover, .btn-back:hover {
+        background: rgba(0,0,0,0.05);
       }
       .empty {
         text-align: center;
@@ -763,7 +684,7 @@ class RecurringTodosCard extends LitElement {
         color: var(--text-secondary);
       }
       .btn-action:hover {
-        background: rgba(0, 0, 0, 0.05);
+        background: rgba(0,0,0,0.05);
       }
       form {
         display: flex;
@@ -810,7 +731,7 @@ class RecurringTodosCard extends LitElement {
         flex-direction: row !important;
         align-items: center;
         gap: 2px !important;
-        background: rgba(0, 0, 0, 0.05);
+        background: rgba(0,0,0,0.05);
         padding: 4px 8px;
         border-radius: 12px;
         cursor: pointer;
@@ -861,16 +782,118 @@ class RecurringTodosCard extends LitElement {
         font-style: italic;
         margin-top: 12px;
         padding: 8px;
-        background: rgba(0, 0, 0, 0.03);
+        background: rgba(0,0,0,0.03);
         border-radius: 4px;
       }
     `;
   }
 }
 
-// ============================================================
-// Registration
-// ============================================================
+class RecurringTodosCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const root = this.shadowRoot;
+
+    while (root.firstChild) root.removeChild(root.firstChild);
+
+    const style = document.createElement("style");
+    style.textContent = `
+      .editor {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 0;
+      }
+      .row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      label {
+        font-size: 0.85em;
+        color: var(--secondary-text-color, #727272);
+        font-weight: 500;
+      }
+      input {
+        padding: 8px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        font-size: 0.95em;
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+        color: var(--primary-text-color, #212121);
+      }
+    `;
+    root.appendChild(style);
+
+    const editor = document.createElement("div");
+    editor.className = "editor";
+
+    // Entity picker
+    const entityRow = document.createElement("div");
+    entityRow.className = "row";
+    const entityLabel = document.createElement("label");
+    entityLabel.textContent = "Entity";
+    entityRow.appendChild(entityLabel);
+
+    const entityPicker = document.createElement("ha-entity-picker");
+    entityPicker.hass = this._hass;
+    entityPicker.value = this._config.entity || "";
+    entityPicker.includeDomains = ["todo"];
+    entityPicker.addEventListener("value-changed", (ev) => {
+      this._config = { ...this._config, entity: ev.detail.value };
+      this._dispatch();
+    });
+    entityRow.appendChild(entityPicker);
+    editor.appendChild(entityRow);
+
+    // Title override
+    const titleRow = document.createElement("div");
+    titleRow.className = "row";
+    const titleLabel = document.createElement("label");
+    titleLabel.textContent = "Title (optional)";
+    titleRow.appendChild(titleLabel);
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.value = this._config.title || "";
+    titleInput.placeholder = "Uses entity name if empty";
+    titleInput.addEventListener("input", (ev) => {
+      this._config = { ...this._config, title: ev.target.value };
+      this._dispatch();
+    });
+    titleRow.appendChild(titleInput);
+    editor.appendChild(titleRow);
+
+    root.appendChild(editor);
+  }
+
+  _dispatch() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+}
 
 customElements.define("recurring-todos-card-editor", RecurringTodosCardEditor);
 customElements.define("recurring-todos-card", RecurringTodosCard);
@@ -879,8 +902,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "recurring-todos-card",
   name: "Recurring Todos",
-  description:
-    "Task list with recurring due dates, overdue highlighting, and completion history.",
+  description: "Task list with recurring due dates, overdue highlighting, and completion history.",
 });
-
-})();
