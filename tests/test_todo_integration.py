@@ -10,6 +10,7 @@ from homeassistant.components.todo import (
     TodoItemStatus,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from custom_components.recurring_todos.const import DOMAIN, EVENT_OVERDUE
 from custom_components.recurring_todos.model import TaskItem
@@ -128,7 +129,7 @@ async def test_overdue_event_fires(hass: HomeAssistant, mock_setup_entry):
     from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
     store = hass.data[DOMAIN]["store"]
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = dt_util.now().date() - timedelta(days=1)
 
     task = TaskItem(name="Overdue task", due_date=yesterday)
     await store.async_add_item(mock_setup_entry.entry_id, task)
