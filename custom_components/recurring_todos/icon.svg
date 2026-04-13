@@ -1,15 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="256" height="256">
-  <rect width="24" height="24" rx="4" fill="#4CAF50"/>
-  <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Checklist lines -->
-    <line x1="11" y1="7" x2="17" y2="7"/>
-    <line x1="11" y1="12" x2="17" y2="12"/>
-    <line x1="11" y1="17" x2="15" y2="17"/>
-    <!-- Checkboxes -->
-    <polyline points="6,6.5 7.5,8 9.5,5.5"/>
-    <polyline points="6,11.5 7.5,13 9.5,10.5"/>
-    <!-- Recurrence arrow on last item -->
-    <path d="M6,16 a2,2 0 1,1 0,3" />
-    <polyline points="5,18.5 6,19 6.5,18"/>
-  </g>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#43A047"/>
+      <stop offset="100%" stop-color="#66BB6A"/>
+    </linearGradient>
+  </defs>
+  <!-- Clipboard body -->
+  <rect x="4" y="3" width="16" height="19" rx="2" fill="none" stroke="url(#g)" stroke-width="1.4"/>
+  <!-- Clipboard clip -->
+  <rect x="8.5" y="1.5" width="7" height="3" rx="1" fill="url(#g)"/>
+  <!-- Check mark (completed task) -->
+  <polyline points="7,8.5 9,10.5 13,7" fill="none" stroke="#43A047" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Task line -->
+  <line x1="14.5" y1="8.5" x2="17.5" y2="8.5" stroke="#66BB6A" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- Circular recurrence arrow -->
+  <path d="M9.5,17 a2.5,2.5 0 1,1 4,1.5" fill="none" stroke="#43A047" stroke-width="1.3" stroke-linecap="round"/>
+  <polyline points="13,17.5 13.5,18.5 12.5,19" fill="none" stroke="#43A047" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
