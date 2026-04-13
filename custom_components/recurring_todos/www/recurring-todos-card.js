@@ -39,6 +39,8 @@ class RecurringTodosCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // Skip re-render while user is on a form to avoid destroying inputs mid-typing
+    if (this._view === "add" || this._view === "edit") return;
     this._render();
   }
 
