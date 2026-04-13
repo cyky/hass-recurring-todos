@@ -21,15 +21,41 @@ Push a task's due date forward.
 | `task_uid` | string | yes | — | Task UUID |
 | `days` | int | no | 1 | Days to snooze (1–365) |
 
+### `recurring_todos.create_task`
+
+Create a new task with optional recurrence.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `entity_id` | string | yes | Todo list entity |
+| `name` | string | yes | Task name |
+| `description` | string | no | Task description |
+| `due_date` | string | no | ISO 8601 date |
+| `rrule` | string | no | iCal RRULE string |
+
+### `recurring_todos.update_task`
+
+Update an existing task's fields. Only provided fields are changed.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `entity_id` | string | yes | Todo list entity |
+| `task_uid` | string | yes | Task UUID |
+| `name` | string | no | New task name |
+| `description` | string | no | New description |
+| `due_date` | string | no | New due date (ISO 8601) |
+| `rrule` | string | no | New RRULE (empty string to remove) |
+
 ## Entity Attributes
 
 Entity domain: `todo`, integration: `recurring_todos`
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `todo_items` | list[TodoItem] | Standard HA todo items (uid, summary, description, status, due) |
+| `todo_items` | list[dict] | All tasks: `{uid, summary, description, status, due, rrule}` |
 | `overdue_count` | int | Number of overdue tasks |
 | `overdue_tasks` | list[dict] | Overdue tasks: `{uid, name, due_date}` |
+| `tasks_detail` | list[dict] | Task metadata: `{uid, name, rrule, completion_count}` |
 
 ## Events
 

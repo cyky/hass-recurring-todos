@@ -144,6 +144,31 @@ Pushes a task's due date forward by a number of days.
 | `task_uid` | Yes | | The unique identifier of the task |
 | `days` | No | 1 | Number of days to snooze (1-365) |
 
+### `recurring_todos.create_task`
+
+Creates a new task with optional recurrence.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `entity_id` | Yes | The todo list entity |
+| `name` | Yes | Task name |
+| `description` | No | Task description |
+| `due_date` | No | Due date in ISO format (e.g., `2026-04-15`) |
+| `rrule` | No | iCal RRULE string (e.g., `FREQ=WEEKLY;BYDAY=MO,FR`) |
+
+### `recurring_todos.update_task`
+
+Updates an existing task's fields.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `entity_id` | Yes | The todo list entity |
+| `task_uid` | Yes | The unique identifier of the task |
+| `name` | No | New task name |
+| `description` | No | New description |
+| `due_date` | No | New due date in ISO format |
+| `rrule` | No | New RRULE string (empty string to remove recurrence) |
+
 ## Automation examples
 
 ### Notify when tasks become overdue
@@ -187,6 +212,19 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[test]"
 pytest tests/
+
+# Local HA instance via Docker
+mkdir -p dev-config
+cat > dev-config/configuration.yaml <<'YAML'
+default_config:
+
+logger:
+  default: info
+  logs:
+    custom_components.recurring_todos: debug
+YAML
+docker compose up -d
+# HA available at http://localhost:8123
 ```
 
 See also:
