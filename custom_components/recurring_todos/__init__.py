@@ -69,7 +69,7 @@ SERVICE_SCHEMA_UPDATE = vol.Schema(
     }
 )
 
-CARD_VERSION = "0.2.0"
+CARD_VERSION = "0.2.1"
 CARD_URL = f"/api/{DOMAIN}/recurring-todos-card.js"
 CARD_URL_CACHE_BUST = f"{CARD_URL}?v={CARD_VERSION}"
 CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"

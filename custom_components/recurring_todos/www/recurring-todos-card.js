@@ -8,6 +8,8 @@
  * HA's frequent hass state pushes without being destroyed.
  */
 
+(async () => {
+
 const DAYS_OF_WEEK = [
   { value: "MO", label: "Mon" },
   { value: "TU", label: "Tue" },
@@ -18,7 +20,9 @@ const DAYS_OF_WEEK = [
   { value: "SU", label: "Sun" },
 ];
 
-// Access HA's bundled Lit — no external CDN needed
+// Wait for HA to register its Lit-based elements before we can access Lit.
+// Card JS may load before HA's own elements are defined.
+await customElements.whenDefined("ha-panel-lovelace");
 const { LitElement, html, css } = Object.getPrototypeOf(
   customElements.get("ha-panel-lovelace")
 );
@@ -878,3 +882,5 @@ window.customCards.push({
   description:
     "Task list with recurring due dates, overdue highlighting, and completion history.",
 });
+
+})();
