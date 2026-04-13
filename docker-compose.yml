@@ -1,0 +1,13 @@
+# Create dev-config/configuration.yaml before first run:
+#   mkdir -p dev-config
+#   echo -e "default_config:\n\nlogger:\n  default: info\n  logs:\n    custom_components.recurring_todos: debug" > dev-config/configuration.yaml
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: ha-dev
+    restart: "no"
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./dev-config:/config
+      - ./custom_components/recurring_todos:/config/custom_components/recurring_todos:ro

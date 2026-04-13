@@ -12,6 +12,7 @@ from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -21,9 +22,11 @@ from .const import (
     SERVICE_CREATE_TASK,
     SERVICE_SNOOZE_TASK,
     SERVICE_UPDATE_TASK,
+    SIGNAL_STORE_UPDATED,
 )
 from .notify import NotificationChecker
 from .recurrence import calculate_next_due
+from .model import TaskItem
 from .store import RecurringTodosStore
 
 DATA_STORE = "store"
@@ -66,7 +69,9 @@ SERVICE_SCHEMA_UPDATE = vol.Schema(
     }
 )
 
-CARD_URL = f"/{DOMAIN}/recurring-todos-card.js"
+CARD_VERSION = "0.1.0"
+CARD_URL = f"/api/{DOMAIN}/recurring-todos-card.js"
+CARD_URL_CACHE_BUST = f"{CARD_URL}?v={CARD_VERSION}"
 CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"
 
 
@@ -85,6 +90,11 @@ def _resolve_store(
         raise ValueError(f"No store for config entry {config_entry_id}")
 
     return domain_data[DATA_STORE], config_entry_id
+
+
+def _async_refresh_entity(hass: HomeAssistant, entity_id: str) -> None:
+    """Signal the entity to update its state after a store change."""
+    async_dispatcher_send(hass, SIGNAL_STORE_UPDATED, entity_id)
 
 
 async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -109,6 +119,7 @@ async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) ->
         task.status = TodoItemStatus.COMPLETED
 
     await store.async_update_item(entry_id, task)
+    _async_refresh_entity(hass, call.data["entity_id"])
 
 
 async def _async_handle_snooze_task(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -125,6 +136,7 @@ async def _async_handle_snooze_task(hass: HomeAssistant, call: ServiceCall) -> N
         days=call.data["days"]
     )
     await store.async_update_item(entry_id, task)
+    _async_refresh_entity(hass, call.data["entity_id"])
 
 
 async def _async_handle_create_task(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -141,6 +153,7 @@ async def _async_handle_create_task(hass: HomeAssistant, call: ServiceCall) -> N
         rrule=call.data.get("rrule") or None,
     )
     await store.async_add_item(entry_id, task)
+    _async_refresh_entity(hass, call.data["entity_id"])
 
 
 async def _async_handle_update_task(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -164,6 +177,7 @@ async def _async_handle_update_task(hass: HomeAssistant, call: ServiceCall) -> N
         task.rrule = call.data["rrule"] or None
 
     await store.async_update_item(entry_id, task)
+    _async_refresh_entity(hass, call.data["entity_id"])
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -223,9 +237,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
         )
-        from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
+        if "frontend" in hass.config.components:
+            from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
 
-        add_extra_js_url(hass, CARD_URL)
+            add_extra_js_url(hass, CARD_URL_CACHE_BUST)
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()

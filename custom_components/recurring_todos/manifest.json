@@ -3,7 +3,7 @@
   "name": "Recurring Todos",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["frontend", "http"],
+  "dependencies": ["http"],
   "documentation": "",
   "iot_class": "local_push",
   "integration_type": "service",

@@ -13,12 +13,13 @@ from homeassistant.components.todo import (
     TodoListEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, EVENT_OVERDUE, OVERDUE_CHECK_INTERVAL
+from .const import DOMAIN, EVENT_OVERDUE, OVERDUE_CHECK_INTERVAL, SIGNAL_STORE_UPDATED
 from .model import TaskItem
 from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
@@ -49,6 +50,7 @@ class RecurringTodosListEntity(TodoListEntity):
         self._attr_name = entry.title
         self._attr_unique_id = entry.entry_id
         self._unsub_overdue_check: Callable[[], None] | None = None
+        self._unsub_store_update: Callable[[], None] | None = None
 
     @property
     def todo_items(self) -> list[TodoItem]:
@@ -70,6 +72,17 @@ class RecurringTodosListEntity(TodoListEntity):
         tasks = self._store.get_items(self._entry.entry_id)
         overdue = [t for t in tasks if t.is_overdue]
         return {
+            "todo_items": [
+                {
+                    "uid": t.uid,
+                    "summary": t.name,
+                    "description": t.description,
+                    "status": t.status.value if t.status else None,
+                    "due": t.due_date.isoformat() if t.due_date else None,
+                    "rrule": t.rrule,
+                }
+                for t in tasks
+            ],
             "overdue_count": len(overdue),
             "overdue_tasks": [
                 {
@@ -90,12 +103,21 @@ class RecurringTodosListEntity(TodoListEntity):
             ],
         }
 
+    @callback
+    def _handle_store_update(self, entity_id: str) -> None:
+        """Handle a store update signal for this entity."""
+        if entity_id == self.entity_id:
+            self.async_write_ha_state()
+
     async def async_added_to_hass(self) -> None:
         """Start periodic overdue check when entity is added."""
         self._unsub_overdue_check = async_track_time_interval(
             self.hass,
             self._async_check_overdue,
             timedelta(seconds=OVERDUE_CHECK_INTERVAL),
+        )
+        self._unsub_store_update = async_dispatcher_connect(
+            self.hass, SIGNAL_STORE_UPDATED, self._handle_store_update
         )
         await self._async_check_overdue()
 
@@ -104,6 +126,9 @@ class RecurringTodosListEntity(TodoListEntity):
         if self._unsub_overdue_check is not None:
             self._unsub_overdue_check()
             self._unsub_overdue_check = None
+        if self._unsub_store_update is not None:
+            self._unsub_store_update()
+            self._unsub_store_update = None
 
     async def _async_check_overdue(self, _now: datetime | None = None) -> None:
         """Check for overdue tasks and fire events."""

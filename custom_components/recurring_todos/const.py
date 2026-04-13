@@ -13,6 +13,7 @@ SERVICE_COMPLETE_TASK = "complete_task"
 SERVICE_SNOOZE_TASK = "snooze_task"
 SERVICE_CREATE_TASK = "create_task"
 SERVICE_UPDATE_TASK = "update_task"
+SIGNAL_STORE_UPDATED = f"{DOMAIN}_store_updated"
 
 # Options flow keys
 CONF_DEFAULT_RECURRENCE = "default_recurrence"
