@@ -98,6 +98,7 @@ class RecurringTodosListEntity(TodoListEntity):
                     "name": t.name,
                     "rrule": t.rrule,
                     "completion_count": len(t.completion_history),
+                    "completion_history": t.completion_history,
                 }
                 for t in tasks
             ],

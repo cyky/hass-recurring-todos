@@ -51,6 +51,16 @@ type: custom:recurring-todos-card
 entity: todo.household_chores
 ```
 
+### Card screenshots
+
+| Task list | Add/edit form | Recurrence picker |
+|:---------:|:-------------:|:-----------------:|
+| ![Task list](docs/images/card-list.png) | ![Add form](docs/images/card-add-form.png) | ![Recurrence](docs/images/card-recurrence.png) |
+
+| Delete confirmation | Completion history |
+|:-------------------:|:------------------:|
+| ![Delete confirm](docs/images/card-delete-confirm.png) | ![History](docs/images/card-history.png) |
+
 ## Configuration
 
 Use the options flow (**Settings > Devices & Services > Recurring Todos > Configure**) to set:

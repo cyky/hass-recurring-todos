@@ -82,6 +82,12 @@ class RecurringTodosCard extends HTMLElement {
     return detail ? detail.rrule : null;
   }
 
+  _getTaskDetail(uid) {
+    const state = this._getState();
+    if (!state?.attributes?.tasks_detail) return null;
+    return state.attributes.tasks_detail.find((t) => t.uid === uid) || null;
+  }
+
   _isOverdue(task) {
     const overdueList = this._getOverdueTasks();
     return overdueList.some((t) => t.uid === task.uid);
@@ -121,6 +127,26 @@ class RecurringTodosCard extends HTMLElement {
       if (key === "BYDAY") result.days = val.split(",");
     }
     return result;
+  }
+
+  _freqUnitLabel(freq) {
+    const map = { daily: "days", weekly: "weeks", monthly: "months", yearly: "years" };
+    return map[freq] || "";
+  }
+
+  /**
+   * Create a button with an ha-icon child.
+   * Uses plain <button> + ha-icon for reliable rendering across HA versions.
+   */
+  _iconButton(icon, { title, className, onClick } = {}) {
+    const btn = document.createElement("button");
+    btn.className = "icon-btn" + (className ? " " + className : "");
+    if (title) btn.title = title;
+    if (onClick) btn.addEventListener("click", onClick);
+    const iconEl = document.createElement("ha-icon");
+    iconEl.setAttribute("icon", icon);
+    btn.appendChild(iconEl);
+    return btn;
   }
 
   // --- Service calls ---
@@ -221,27 +247,17 @@ class RecurringTodosCard extends HTMLElement {
     header.appendChild(title);
 
     if (this._view === "list") {
-      const btnAdd = document.createElement("button");
-      btnAdd.className = "btn-add";
-      btnAdd.id = "btn-add";
-      btnAdd.textContent = "+";
-      btnAdd.addEventListener("click", () => {
-        this._view = "add";
-        this._render();
-      });
-      header.appendChild(btnAdd);
+      header.appendChild(this._iconButton("mdi:plus", {
+        className: "header-btn",
+        title: "Add task",
+        onClick: () => { this._view = "add"; this._render(); },
+      }));
     } else {
-      const btnBack = document.createElement("button");
-      btnBack.className = "btn-back";
-      btnBack.id = "btn-back";
-      btnBack.textContent = "\u2190";
-      btnBack.addEventListener("click", () => {
-        this._view = "list";
-        this._editTask = null;
-        this._historyTask = null;
-        this._render();
-      });
-      header.appendChild(btnBack);
+      header.appendChild(this._iconButton("mdi:arrow-left", {
+        className: "header-btn",
+        title: "Back",
+        onClick: () => { this._view = "list"; this._editTask = null; this._historyTask = null; this._render(); },
+      }));
     }
 
     card.appendChild(header);
@@ -290,23 +306,23 @@ class RecurringTodosCard extends HTMLElement {
       const overdue = this._isOverdue(task);
       const daysUntil = this._daysUntilDue(task);
       const completed = task.status === "completed";
+      const hasRrule = !!this._getTaskRrule(task.uid);
 
       const taskEl = document.createElement("div");
-      taskEl.className = "task" + (overdue ? " overdue" : "") + (completed ? " completed" : "");
+      taskEl.className = "task"
+        + (overdue ? " overdue" : "")
+        + (completed ? " completed" : "")
+        + (daysUntil === 0 && !overdue ? " due-today" : "")
+        + (daysUntil === 1 ? " due-tomorrow" : "");
 
       // Main row
       const main = document.createElement("div");
       main.className = "task-main";
 
-      const btnComplete = document.createElement("button");
-      btnComplete.className = "btn-complete";
-      btnComplete.title = "Complete";
-      btnComplete.textContent = completed ? "\u2611" : "\u2610";
-      btnComplete.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._completeTask(task.uid);
-      });
-      main.appendChild(btnComplete);
+      main.appendChild(this._iconButton(
+        completed ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline",
+        { className: "btn-complete", title: "Complete", onClick: () => this._completeTask(task.uid) }
+      ));
 
       const info = document.createElement("div");
       info.className = "task-info";
@@ -324,6 +340,17 @@ class RecurringTodosCard extends HTMLElement {
       }
       main.appendChild(info);
 
+      // Due label + recurring badge container
+      const dueBadges = document.createElement("div");
+      dueBadges.className = "due-badges";
+
+      if (hasRrule) {
+        const recurIcon = document.createElement("ha-icon");
+        recurIcon.className = "recurring-badge";
+        recurIcon.setAttribute("icon", "mdi:repeat");
+        dueBadges.appendChild(recurIcon);
+      }
+
       if (daysUntil !== null) {
         let dueText = "";
         if (daysUntil < 0) dueText = Math.abs(daysUntil) + "d overdue";
@@ -332,63 +359,57 @@ class RecurringTodosCard extends HTMLElement {
         else dueText = daysUntil + "d";
 
         const dueLabel = document.createElement("span");
-        dueLabel.className = "due-label" + (overdue ? " overdue" : "");
+        dueLabel.className = "due-label"
+          + (overdue ? " overdue" : "")
+          + (daysUntil === 0 && !overdue ? " due-today" : "");
         dueLabel.textContent = dueText;
-        main.appendChild(dueLabel);
+        dueBadges.appendChild(dueLabel);
       }
+      main.appendChild(dueBadges);
       taskEl.appendChild(main);
 
-      // Action row
+      // Action row — always visible
       const actions = document.createElement("div");
       actions.className = "task-actions";
 
-      const btnSnooze = document.createElement("button");
-      btnSnooze.className = "btn-action";
-      btnSnooze.title = "Snooze 1 day";
-      btnSnooze.textContent = "\u23F0";
-      btnSnooze.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._snoozeTask(task.uid);
-      });
-      actions.appendChild(btnSnooze);
-
-      const btnEdit = document.createElement("button");
-      btnEdit.className = "btn-action";
-      btnEdit.title = "Edit";
-      btnEdit.textContent = "\u270F";
-      btnEdit.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._editTask = task;
-        this._view = "edit";
-        this._render();
-      });
-      actions.appendChild(btnEdit);
-
-      const btnHistory = document.createElement("button");
-      btnHistory.className = "btn-action";
-      btnHistory.title = "History";
-      btnHistory.textContent = "\uD83D\uDCCB";
-      btnHistory.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._historyTask = task;
-        this._view = "history";
-        this._render();
-      });
-      actions.appendChild(btnHistory);
-
-      const btnDelete = document.createElement("button");
-      btnDelete.className = "btn-action";
-      btnDelete.title = "Delete";
-      btnDelete.textContent = "\uD83D\uDDD1";
-      btnDelete.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._deleteTask(task.uid);
-      });
-      actions.appendChild(btnDelete);
+      actions.appendChild(this._iconButton("mdi:alarm", {
+        title: "Snooze 1 day",
+        onClick: () => this._snoozeTask(task.uid),
+      }));
+      actions.appendChild(this._iconButton("mdi:pencil", {
+        title: "Edit",
+        onClick: () => { this._editTask = task; this._view = "edit"; this._render(); },
+      }));
+      actions.appendChild(this._iconButton("mdi:history", {
+        title: "History",
+        onClick: () => { this._historyTask = task; this._view = "history"; this._render(); },
+      }));
+      actions.appendChild(this._iconButton("mdi:delete", {
+        title: "Delete",
+        onClick: () => this._showDeleteConfirm(actions, task.uid),
+      }));
 
       taskEl.appendChild(actions);
       container.appendChild(taskEl);
     }
+  }
+
+  _showDeleteConfirm(actionsEl, uid) {
+    while (actionsEl.firstChild) actionsEl.removeChild(actionsEl.firstChild);
+
+    const confirmText = document.createElement("span");
+    confirmText.className = "confirm-text";
+    confirmText.textContent = "Delete?";
+    actionsEl.appendChild(confirmText);
+
+    actionsEl.appendChild(this._iconButton("mdi:check", {
+      className: "confirm-yes",
+      onClick: () => this._deleteTask(uid),
+    }));
+    actionsEl.appendChild(this._iconButton("mdi:close", {
+      className: "confirm-no",
+      onClick: () => this._render(),
+    }));
   }
 
   _buildForm(container, task) {
@@ -450,9 +471,14 @@ class RecurringTodosCard extends HTMLElement {
     freqLabel.appendChild(freqSelect);
     fieldset.appendChild(freqLabel);
 
+    // Dynamic interval label
     const intervalLabel = document.createElement("label");
     intervalLabel.className = "interval-label";
-    intervalLabel.textContent = "Every N";
+    const intervalText = document.createElement("span");
+    intervalText.textContent = rrule.freq === "none"
+      ? "Interval"
+      : "Every N " + this._freqUnitLabel(rrule.freq);
+    intervalLabel.appendChild(intervalText);
     const intervalInput = document.createElement("input");
     intervalInput.type = "number";
     intervalInput.name = "interval";
@@ -485,9 +511,12 @@ class RecurringTodosCard extends HTMLElement {
     fieldset.appendChild(daysDiv);
     form.appendChild(fieldset);
 
-    // Toggle days visibility on freq change
+    // Toggle days visibility and update interval label on freq change
     freqSelect.addEventListener("change", () => {
       daysDiv.style.display = freqSelect.value === "weekly" ? "flex" : "none";
+      intervalText.textContent = freqSelect.value === "none"
+        ? "Interval"
+        : "Every N " + this._freqUnitLabel(freqSelect.value);
     });
 
     // Submit
@@ -563,10 +592,46 @@ class RecurringTodosCard extends HTMLElement {
       view.appendChild(desc);
     }
 
-    const note = document.createElement("div");
-    note.className = "history-note";
-    note.textContent = "Completion history is stored in the backend. Access via Developer Tools > States for the full record.";
-    view.appendChild(note);
+    // Show actual completion history
+    const detail = this._getTaskDetail(task.uid);
+    const history = detail?.completion_history || [];
+
+    if (history.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "history-note";
+      empty.textContent = "No completions yet.";
+      view.appendChild(empty);
+    } else {
+      const heading = document.createElement("h4");
+      heading.className = "history-heading";
+      heading.textContent = "Completions (" + history.length + ")";
+      view.appendChild(heading);
+
+      const list = document.createElement("ul");
+      list.className = "history-list";
+      // Show most recent first, cap at 50
+      const recent = [...history].reverse().slice(0, 50);
+      for (const entry of recent) {
+        const li = document.createElement("li");
+        const date = new Date(entry.completed_at);
+        li.textContent = date.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        list.appendChild(li);
+      }
+      view.appendChild(list);
+
+      if (history.length > 50) {
+        const more = document.createElement("div");
+        more.className = "history-note";
+        more.textContent = "Showing 50 of " + history.length + " completions.";
+        view.appendChild(more);
+      }
+    }
 
     container.appendChild(view);
   }
@@ -581,6 +646,7 @@ class RecurringTodosCard extends HTMLElement {
         --text-secondary: var(--secondary-text-color, #727272);
         --accent: var(--primary-color, #03a9f4);
         --error: var(--error-color, #db4437);
+        --warning: var(--warning-color, #ffa600);
         --divider: var(--divider-color, #e0e0e0);
       }
       .card-header {
@@ -592,20 +658,32 @@ class RecurringTodosCard extends HTMLElement {
         font-weight: 500;
         color: var(--text-primary);
       }
-      .card-content {
-        padding: 12px 16px 16px;
-      }
-      .btn-add, .btn-back {
+      .icon-btn {
         background: none;
         border: none;
-        font-size: 1.4em;
         cursor: pointer;
-        color: var(--accent);
-        padding: 4px 8px;
-        border-radius: 4px;
+        padding: 6px;
+        border-radius: 50%;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
       }
-      .btn-add:hover, .btn-back:hover {
-        background: rgba(0,0,0,0.05);
+      .icon-btn:hover {
+        background: rgba(0,0,0,0.06);
+      }
+      .icon-btn ha-icon {
+        --mdc-icon-size: 20px;
+      }
+      .card-header .header-btn {
+        color: var(--accent);
+      }
+      .card-header .header-btn ha-icon {
+        --mdc-icon-size: 22px;
+      }
+      .card-content {
+        padding: 12px 16px 16px;
       }
       .empty {
         text-align: center;
@@ -622,7 +700,7 @@ class RecurringTodosCard extends HTMLElement {
       .task-main {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 4px;
       }
       .task-info {
         flex: 1;
@@ -650,6 +728,26 @@ class RecurringTodosCard extends HTMLElement {
         margin: 0 -16px;
         padding: 8px 16px;
       }
+      .task.due-today {
+        background: rgba(255, 166, 0, 0.08);
+        margin: 0 -16px;
+        padding: 8px 16px;
+      }
+      .task.due-tomorrow {
+        background: rgba(255, 166, 0, 0.04);
+        margin: 0 -16px;
+        padding: 8px 16px;
+      }
+      .due-badges {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .recurring-badge {
+        --mdc-icon-size: 14px;
+        color: var(--text-secondary);
+      }
       .due-label {
         font-size: 0.8em;
         color: var(--text-secondary);
@@ -659,32 +757,41 @@ class RecurringTodosCard extends HTMLElement {
         color: var(--error);
         font-weight: 500;
       }
-      .task-actions {
-        display: flex;
-        gap: 4px;
-        padding-left: 36px;
-        margin-top: 4px;
+      .due-label.due-today {
+        color: var(--warning);
+        font-weight: 500;
       }
       .btn-complete {
-        background: none;
-        border: none;
-        font-size: 1.2em;
-        cursor: pointer;
-        padding: 2px;
-        line-height: 1;
-        color: var(--text-secondary);
+        flex-shrink: 0;
       }
-      .btn-action {
-        background: none;
-        border: none;
+      .btn-complete ha-icon {
+        --mdc-icon-size: 22px;
+      }
+      .task.completed .btn-complete {
+        color: var(--accent);
+      }
+      .task-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-left: 36px;
+        margin-top: 2px;
+      }
+      .task-actions .icon-btn ha-icon {
+        --mdc-icon-size: 18px;
+      }
+      .confirm-text {
         font-size: 0.85em;
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 4px;
-        color: var(--text-secondary);
+        color: var(--error);
+        font-weight: 500;
+        line-height: 36px;
+        margin-right: 4px;
       }
-      .btn-action:hover {
-        background: rgba(0,0,0,0.05);
+      .confirm-yes {
+        color: var(--error);
+      }
+      .confirm-no {
+        color: var(--text-secondary);
       }
       form {
         display: flex;
@@ -775,6 +882,26 @@ class RecurringTodosCard extends HTMLElement {
         font-size: 0.9em;
         color: var(--text-primary);
         margin: 8px 0;
+      }
+      .history-heading {
+        font-size: 0.9em;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin: 12px 0 4px;
+      }
+      .history-list {
+        list-style: none;
+        padding: 0;
+        margin: 4px 0;
+      }
+      .history-list li {
+        padding: 6px 0;
+        border-bottom: 1px solid var(--divider);
+        font-size: 0.85em;
+        color: var(--text-primary);
+      }
+      .history-list li:last-child {
+        border-bottom: none;
       }
       .history-note {
         font-size: 0.8em;
