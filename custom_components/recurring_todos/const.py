@@ -11,6 +11,8 @@ OVERDUE_CHECK_INTERVAL = 300  # seconds
 NOTIFICATION_CHECK_INTERVAL = 1800  # seconds (30 minutes)
 SERVICE_COMPLETE_TASK = "complete_task"
 SERVICE_SNOOZE_TASK = "snooze_task"
+SERVICE_CREATE_TASK = "create_task"
+SERVICE_UPDATE_TASK = "update_task"
 
 # Options flow keys
 CONF_DEFAULT_RECURRENCE = "default_recurrence"

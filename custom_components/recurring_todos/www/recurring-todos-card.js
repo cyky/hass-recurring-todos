@@ -73,6 +73,13 @@ class RecurringTodosCard extends HTMLElement {
     return state.attributes.overdue_tasks || [];
   }
 
+  _getTaskRrule(uid) {
+    const state = this._getState();
+    if (!state || !state.attributes || !state.attributes.tasks_detail) return null;
+    const detail = state.attributes.tasks_detail.find((t) => t.uid === uid);
+    return detail ? detail.rrule : null;
+  }
+
   _isOverdue(task) {
     const overdueList = this._getOverdueTasks();
     return overdueList.some((t) => t.uid === task.uid);
@@ -132,12 +139,28 @@ class RecurringTodosCard extends HTMLElement {
   }
 
   async _createTask(data) {
-    await this._hass.callService("todo", "add_item", {
+    const serviceData = {
       entity_id: this._config.entity,
-      item: data.name,
-      due_date: data.due_date || undefined,
-      description: data.description || undefined,
-    });
+      name: data.name,
+    };
+    if (data.description) serviceData.description = data.description;
+    if (data.due_date) serviceData.due_date = data.due_date;
+    if (data.rrule) serviceData.rrule = data.rrule;
+
+    await this._hass.callService("recurring_todos", "create_task", serviceData);
+  }
+
+  async _updateTask(uid, data) {
+    const serviceData = {
+      entity_id: this._config.entity,
+      task_uid: uid,
+    };
+    if (data.name !== undefined) serviceData.name = data.name;
+    if (data.description !== undefined) serviceData.description = data.description;
+    if (data.due_date !== undefined) serviceData.due_date = data.due_date;
+    if (data.rrule !== undefined) serviceData.rrule = data.rrule;
+
+    await this._hass.callService("recurring_todos", "update_task", serviceData);
   }
 
   async _deleteTask(uid) {
@@ -327,6 +350,18 @@ class RecurringTodosCard extends HTMLElement {
       });
       actions.appendChild(btnSnooze);
 
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn-action";
+      btnEdit.title = "Edit";
+      btnEdit.textContent = "\u270F";
+      btnEdit.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._editTask = task;
+        this._view = "edit";
+        this._render();
+      });
+      actions.appendChild(btnEdit);
+
       const btnHistory = document.createElement("button");
       btnHistory.className = "btn-action";
       btnHistory.title = "History";
@@ -355,7 +390,7 @@ class RecurringTodosCard extends HTMLElement {
   }
 
   _buildForm(container, task) {
-    const rrule = task ? this._parseRrule(task._rrule) : { freq: "none", interval: 1, days: [] };
+    const rrule = task ? this._parseRrule(this._getTaskRrule(task.uid)) : { freq: "none", interval: 1, days: [] };
     const isEdit = !!task;
 
     const form = document.createElement("form");
@@ -466,13 +501,25 @@ class RecurringTodosCard extends HTMLElement {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
+      const freq = fd.get("freq");
+      const interval = parseInt(fd.get("interval"), 10) || 1;
+      const days = fd.getAll("days");
+      const builtRrule = this._buildRrule(freq, interval, days);
+
       const data = {
         name: fd.get("name"),
         description: fd.get("description") || "",
         due_date: fd.get("due_date") || "",
+        rrule: builtRrule,
       };
-      await this._createTask(data);
+
+      if (isEdit) {
+        await this._updateTask(task.uid, data);
+      } else {
+        await this._createTask(data);
+      }
       this._view = "list";
+      this._editTask = null;
       this._render();
     });
 

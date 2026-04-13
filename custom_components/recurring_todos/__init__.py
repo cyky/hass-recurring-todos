@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import voluptuous as vol
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, PLATFORMS, SERVICE_COMPLETE_TASK, SERVICE_SNOOZE_TASK
+from .const import (
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_COMPLETE_TASK,
+    SERVICE_CREATE_TASK,
+    SERVICE_SNOOZE_TASK,
+    SERVICE_UPDATE_TASK,
+)
 from .notify import NotificationChecker
 from .recurrence import calculate_next_due
 from .store import RecurringTodosStore
@@ -35,6 +44,30 @@ SERVICE_SCHEMA_SNOOZE = vol.Schema(
         vol.Optional("days", default=1): vol.All(int, vol.Range(min=1, max=365)),
     }
 )
+
+SERVICE_SCHEMA_CREATE = vol.Schema(
+    {
+        vol.Required("entity_id"): str,
+        vol.Required("name"): str,
+        vol.Optional("description"): str,
+        vol.Optional("due_date"): str,
+        vol.Optional("rrule"): str,
+    }
+)
+
+SERVICE_SCHEMA_UPDATE = vol.Schema(
+    {
+        vol.Required("entity_id"): str,
+        vol.Required("task_uid"): str,
+        vol.Optional("name"): str,
+        vol.Optional("description"): str,
+        vol.Optional("due_date"): str,
+        vol.Optional("rrule"): str,
+    }
+)
+
+CARD_URL = f"/{DOMAIN}/recurring-todos-card.js"
+CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"
 
 
 def _resolve_store(
@@ -94,6 +127,45 @@ async def _async_handle_snooze_task(hass: HomeAssistant, call: ServiceCall) -> N
     await store.async_update_item(entry_id, task)
 
 
+async def _async_handle_create_task(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the create_task service call."""
+    store, entry_id = _resolve_store(hass, call.data["entity_id"])
+
+    due_date_str = call.data.get("due_date")
+    due_date = date.fromisoformat(due_date_str) if due_date_str else None
+
+    task = TaskItem(
+        name=call.data["name"],
+        description=call.data.get("description"),
+        due_date=due_date,
+        rrule=call.data.get("rrule") or None,
+    )
+    await store.async_add_item(entry_id, task)
+
+
+async def _async_handle_update_task(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the update_task service call."""
+    store, entry_id = _resolve_store(hass, call.data["entity_id"])
+    task_uid = call.data["task_uid"]
+
+    items = store.get_items(entry_id)
+    task = next((t for t in items if t.uid == task_uid), None)
+    if task is None:
+        raise ValueError(f"Task {task_uid} not found")
+
+    if "name" in call.data:
+        task.name = call.data["name"]
+    if "description" in call.data:
+        task.description = call.data["description"]
+    if "due_date" in call.data:
+        due_str = call.data["due_date"]
+        task.due_date = date.fromisoformat(due_str) if due_str else None
+    if "rrule" in call.data:
+        task.rrule = call.data["rrule"] or None
+
+    await store.async_update_item(entry_id, task)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Recurring Todos from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {
@@ -117,6 +189,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_snooze(call: ServiceCall) -> None:
             await _async_handle_snooze_task(hass, call)
 
+        async def handle_create(call: ServiceCall) -> None:
+            await _async_handle_create_task(hass, call)
+
+        async def handle_update(call: ServiceCall) -> None:
+            await _async_handle_update_task(hass, call)
+
         hass.services.async_register(
             DOMAIN,
             SERVICE_COMPLETE_TASK,
@@ -129,6 +207,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             handle_snooze,
             schema=SERVICE_SCHEMA_SNOOZE,
         )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CREATE_TASK,
+            handle_create,
+            schema=SERVICE_SCHEMA_CREATE,
+        )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_UPDATE_TASK,
+            handle_update,
+            schema=SERVICE_SCHEMA_UPDATE,
+        )
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
+        )
+        if "frontend" in hass.config.components:
+            from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
+
+            add_extra_js_url(hass, CARD_URL)
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()
@@ -152,6 +250,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not domain_data[DATA_ENTRY_IDS]:
             hass.services.async_remove(DOMAIN, SERVICE_COMPLETE_TASK)
             hass.services.async_remove(DOMAIN, SERVICE_SNOOZE_TASK)
+            hass.services.async_remove(DOMAIN, SERVICE_CREATE_TASK)
+            hass.services.async_remove(DOMAIN, SERVICE_UPDATE_TASK)
             hass.data.pop(DOMAIN)
     return unload_ok
 

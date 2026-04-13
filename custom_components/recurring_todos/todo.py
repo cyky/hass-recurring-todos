@@ -66,7 +66,7 @@ class RecurringTodosListEntity(TodoListEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose overdue task information as entity attributes."""
+        """Expose overdue task information and rrule details as entity attributes."""
         tasks = self._store.get_items(self._entry.entry_id)
         overdue = [t for t in tasks if t.is_overdue]
         return {
@@ -78,6 +78,15 @@ class RecurringTodosListEntity(TodoListEntity):
                     "due_date": t.due_date.isoformat() if t.due_date else None,
                 }
                 for t in overdue
+            ],
+            "tasks_detail": [
+                {
+                    "uid": t.uid,
+                    "name": t.name,
+                    "rrule": t.rrule,
+                    "completion_count": len(t.completion_history),
+                }
+                for t in tasks
             ],
         }
 
