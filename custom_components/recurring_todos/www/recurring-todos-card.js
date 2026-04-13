@@ -787,6 +787,113 @@ class RecurringTodosCard extends HTMLElement {
   }
 }
 
+class RecurringTodosCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const root = this.shadowRoot;
+
+    while (root.firstChild) root.removeChild(root.firstChild);
+
+    const style = document.createElement("style");
+    style.textContent = `
+      .editor {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 0;
+      }
+      .row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      label {
+        font-size: 0.85em;
+        color: var(--secondary-text-color, #727272);
+        font-weight: 500;
+      }
+      input {
+        padding: 8px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        font-size: 0.95em;
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+        color: var(--primary-text-color, #212121);
+      }
+    `;
+    root.appendChild(style);
+
+    const editor = document.createElement("div");
+    editor.className = "editor";
+
+    // Entity picker
+    const entityRow = document.createElement("div");
+    entityRow.className = "row";
+    const entityLabel = document.createElement("label");
+    entityLabel.textContent = "Entity";
+    entityRow.appendChild(entityLabel);
+
+    const entityPicker = document.createElement("ha-entity-picker");
+    entityPicker.hass = this._hass;
+    entityPicker.value = this._config.entity || "";
+    entityPicker.includeDomains = ["todo"];
+    entityPicker.addEventListener("value-changed", (ev) => {
+      this._config = { ...this._config, entity: ev.detail.value };
+      this._dispatch();
+    });
+    entityRow.appendChild(entityPicker);
+    editor.appendChild(entityRow);
+
+    // Title override
+    const titleRow = document.createElement("div");
+    titleRow.className = "row";
+    const titleLabel = document.createElement("label");
+    titleLabel.textContent = "Title (optional)";
+    titleRow.appendChild(titleLabel);
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.value = this._config.title || "";
+    titleInput.placeholder = "Uses entity name if empty";
+    titleInput.addEventListener("input", (ev) => {
+      this._config = { ...this._config, title: ev.target.value };
+      this._dispatch();
+    });
+    titleRow.appendChild(titleInput);
+    editor.appendChild(titleRow);
+
+    root.appendChild(editor);
+  }
+
+  _dispatch() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+}
+
+customElements.define("recurring-todos-card-editor", RecurringTodosCardEditor);
 customElements.define("recurring-todos-card", RecurringTodosCard);
 
 window.customCards = window.customCards || [];
