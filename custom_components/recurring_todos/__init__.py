@@ -237,10 +237,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
         )
-        if "frontend" in hass.config.components:
-            from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
 
-            add_extra_js_url(hass, CARD_URL_CACHE_BUST)
+        from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
+
+        add_extra_js_url(hass, CARD_URL_CACHE_BUST)
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()

@@ -3,6 +3,7 @@
   "name": "Recurring Todos",
   "codeowners": ["@cyky"],
   "config_flow": true,
+  "after_dependencies": ["frontend"],
   "dependencies": ["http"],
   "documentation": "https://github.com/cyky/hass-recurring-todos",
   "issue_tracker": "https://github.com/cyky/hass-recurring-todos/issues",
