@@ -1,10 +1,11 @@
 {
   "domain": "recurring_todos",
   "name": "Recurring Todos",
-  "codeowners": [],
+  "codeowners": ["@cyky"],
   "config_flow": true,
   "dependencies": ["http"],
-  "documentation": "",
+  "documentation": "https://github.com/cyky/hass-recurring-todos",
+  "issue_tracker": "https://github.com/cyky/hass-recurring-todos/issues",
   "iot_class": "local_push",
   "integration_type": "service",
   "requirements": ["python-dateutil>=2.8.0"],
