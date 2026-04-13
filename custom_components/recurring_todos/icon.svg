@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="256" height="256">
+  <rect width="24" height="24" rx="4" fill="#4CAF50"/>
+  <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Checklist lines -->
+    <line x1="11" y1="7" x2="17" y2="7"/>
+    <line x1="11" y1="12" x2="17" y2="12"/>
+    <line x1="11" y1="17" x2="15" y2="17"/>
+    <!-- Checkboxes -->
+    <polyline points="6,6.5 7.5,8 9.5,5.5"/>
+    <polyline points="6,11.5 7.5,13 9.5,10.5"/>
+    <!-- Recurrence arrow on last item -->
+    <path d="M6,16 a2,2 0 1,1 0,3" />
+    <polyline points="5,18.5 6,19 6.5,18"/>
+  </g>
+</svg>

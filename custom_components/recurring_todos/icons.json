@@ -1,0 +1,15 @@
+{
+  "entity_component": {
+    "_": {
+      "default": "mdi:clipboard-check-outline"
+    }
+  },
+  "services": {
+    "complete_task": {
+      "service": "mdi:check-circle"
+    },
+    "snooze_task": {
+      "service": "mdi:alarm-snooze"
+    }
+  }
+}
