@@ -60,9 +60,6 @@ pytest tests/
 python -c "import ast; ast.parse(open('custom_components/recurring_todos/model.py').read())"
 ```
 
-## Task Tracker
-See `features.json` for status/dependency graph.
-
 ## Conventions
 - Python 3.12+, `from __future__ import annotations`
 - Dataclasses over dicts for internal models
