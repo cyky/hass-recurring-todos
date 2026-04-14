@@ -71,10 +71,67 @@ SERVICE_SCHEMA_UPDATE = vol.Schema(
     }
 )
 
-CARD_VERSION = "0.4.0"
+CARD_VERSION = "0.5.0"
 CARD_URL = f"/api/{DOMAIN}/recurring-todos-card.js"
 CARD_URL_CACHE_BUST = f"{CARD_URL}?v={CARD_VERSION}"
 CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"
+
+
+async def _get_lovelace_resource_col(hass: HomeAssistant):  # type: ignore[return]
+    """Return the Lovelace ResourceStorageCollection, or None if unavailable."""
+    try:
+        from homeassistant.components.lovelace import LOVELACE_DATA  # noqa: PLC0415
+        from homeassistant.components.lovelace.resources import (  # noqa: PLC0415
+            ResourceStorageCollection,
+        )
+    except ImportError:
+        return None
+
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if lovelace_data is None:
+        return None
+    resource_col = lovelace_data.resources
+    if not isinstance(resource_col, ResourceStorageCollection):
+        return None  # YAML mode — can't write programmatically
+    if not resource_col.loaded:
+        await resource_col.async_load()
+        resource_col.loaded = True
+    return resource_col
+
+
+async def _sync_lovelace_resource(hass: HomeAssistant) -> None:
+    """Register or update the card JS as a Lovelace resource.
+
+    Lovelace resources are awaited before views render, avoiding the race
+    condition where add_extra_js_url modules load asynchronously after the
+    dashboard has already started rendering.
+    """
+    resource_col = await _get_lovelace_resource_col(hass)
+    if resource_col is None:
+        return
+
+    items = list(resource_col.data.values())
+
+    if any(item.get("url") == CARD_URL_CACHE_BUST for item in items):
+        return  # current version already registered
+
+    # Remove stale versions
+    for item in items:
+        if CARD_URL in item.get("url", ""):
+            await resource_col.async_delete_item(item["id"])
+
+    await resource_col.async_create_item({"res_type": "module", "url": CARD_URL_CACHE_BUST})
+
+
+async def _remove_lovelace_resource(hass: HomeAssistant) -> None:
+    """Remove the card JS from Lovelace resources."""
+    resource_col = await _get_lovelace_resource_col(hass)
+    if resource_col is None:
+        return
+
+    for item in list(resource_col.data.values()):
+        if CARD_URL in item.get("url", ""):
+            await resource_col.async_delete_item(item["id"])
 
 
 def _resolve_store(
@@ -261,6 +318,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             hass.data[DATA_CARD_REGISTERED] = True
 
+            # Lovelace resources are awaited before views render — no race condition.
+            await _sync_lovelace_resource(hass)
+
+            # add_extra_js_url keeps the card visible in the Lovelace card editor.
             async def _add_js_url() -> None:
                 from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
 
@@ -317,3 +378,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         store = RecurringTodosStore(hass)
         await store.async_load()
         await store.async_remove_entry(entry.entry_id)
+
+    # Remove Lovelace resource when the last config entry is removed
+    if not hass.config_entries.async_entries(DOMAIN):
+        await _remove_lovelace_resource(hass)

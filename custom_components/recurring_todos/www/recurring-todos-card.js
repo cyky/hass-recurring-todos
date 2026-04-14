@@ -1026,8 +1026,12 @@ class RecurringTodosCardEditor extends HTMLElement {
   }
 }
 
-customElements.define("recurring-todos-card-editor", RecurringTodosCardEditor);
-customElements.define("recurring-todos-card", RecurringTodosCard);
+if (!customElements.get("recurring-todos-card-editor")) {
+  customElements.define("recurring-todos-card-editor", RecurringTodosCardEditor);
+}
+if (!customElements.get("recurring-todos-card")) {
+  customElements.define("recurring-todos-card", RecurringTodosCard);
+}
 
 window.customCards = window.customCards || [];
 window.customCards.push({

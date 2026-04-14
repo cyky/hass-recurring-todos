@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -16,7 +16,13 @@ from custom_components.recurring_todos.const import (
     SERVICE_SNOOZE_TASK,
     SERVICE_UPDATE_TASK,
 )
-from custom_components.recurring_todos.__init__ import CARD_PATH, CARD_URL_CACHE_BUST
+from custom_components.recurring_todos.__init__ import (
+    CARD_PATH,
+    CARD_URL,
+    CARD_URL_CACHE_BUST,
+    _remove_lovelace_resource,
+    _sync_lovelace_resource,
+)
 
 
 async def test_setup_entry_loads(hass: HomeAssistant, mock_setup_entry):
@@ -253,6 +259,120 @@ async def test_unload_entry_with_missing_domain_data(
 
     # Should return True without raising
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+
+
+# --- Lovelace resource registration ---
+
+
+def _make_resource_col(items: list[dict] | None = None):
+    """Build a minimal ResourceStorageCollection mock."""
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    col = MagicMock(spec=ResourceStorageCollection)
+    col.loaded = True
+    col.data = {item["id"]: item for item in (items or [])}
+    col.async_create_item = AsyncMock(side_effect=lambda d: col.data.update(
+        {f"new_{len(col.data)}": {"id": f"new_{len(col.data)}", "url": d["url"], "type": "module"}}
+    ))
+    col.async_delete_item = AsyncMock(side_effect=lambda item_id: col.data.pop(item_id, None))
+    return col
+
+
+def _patch_lovelace(hass, resource_col):
+    """Inject a mock LovelaceData into hass.data."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
+
+    lovelace_data = MagicMock()
+    lovelace_data.resources = resource_col
+    hass.data[LOVELACE_DATA] = lovelace_data
+
+
+async def test_sync_lovelace_resource_registers_card(hass: HomeAssistant):
+    """Resource is created when not yet registered."""
+    col = _make_resource_col()
+    _patch_lovelace(hass, col)
+
+    await _sync_lovelace_resource(hass)
+
+    col.async_create_item.assert_awaited_once_with(
+        {"res_type": "module", "url": CARD_URL_CACHE_BUST}
+    )
+
+
+async def test_sync_lovelace_resource_skips_if_current(hass: HomeAssistant):
+    """No write when current version is already registered."""
+    col = _make_resource_col([{"id": "abc", "url": CARD_URL_CACHE_BUST, "type": "module"}])
+    _patch_lovelace(hass, col)
+
+    await _sync_lovelace_resource(hass)
+
+    col.async_create_item.assert_not_awaited()
+    col.async_delete_item.assert_not_awaited()
+
+
+async def test_sync_lovelace_resource_replaces_stale_version(hass: HomeAssistant):
+    """Stale version is removed and current version is added."""
+    stale_url = f"{CARD_URL}?v=0.1.0"
+    col = _make_resource_col([{"id": "old", "url": stale_url, "type": "module"}])
+    _patch_lovelace(hass, col)
+
+    await _sync_lovelace_resource(hass)
+
+    col.async_delete_item.assert_awaited_once_with("old")
+    col.async_create_item.assert_awaited_once()
+
+
+async def test_sync_lovelace_resource_no_lovelace(hass: HomeAssistant):
+    """No error when Lovelace is not set up."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
+    hass.data.pop(LOVELACE_DATA, None)
+
+    # Should not raise
+    await _sync_lovelace_resource(hass)
+
+
+async def test_sync_lovelace_resource_yaml_mode(hass: HomeAssistant):
+    """No-op when Lovelace uses YAML resources (read-only)."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
+    from homeassistant.components.lovelace.resources import ResourceYAMLCollection
+
+    lovelace_data = MagicMock()
+    lovelace_data.resources = MagicMock(spec=ResourceYAMLCollection)
+    hass.data[LOVELACE_DATA] = lovelace_data
+
+    # Should not raise or write anything
+    await _sync_lovelace_resource(hass)
+
+
+async def test_remove_lovelace_resource(hass: HomeAssistant):
+    """Resource is removed when entry is deleted."""
+    col = _make_resource_col([{"id": "r1", "url": CARD_URL_CACHE_BUST, "type": "module"}])
+    _patch_lovelace(hass, col)
+
+    await _remove_lovelace_resource(hass)
+
+    col.async_delete_item.assert_awaited_once_with("r1")
+
+
+async def test_remove_lovelace_resource_called_on_last_entry_removal(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+):
+    """Lovelace resource is removed when the last config entry is removed."""
+    col = _make_resource_col()
+    _patch_lovelace(hass, col)
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Seed the collection so there's something to remove
+    col.data["r1"] = {"id": "r1", "url": CARD_URL_CACHE_BUST, "type": "module"}
+
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    col.async_delete_item.assert_awaited_with("r1")
 
 
 async def test_remove_entry_cleans_stored_data(
