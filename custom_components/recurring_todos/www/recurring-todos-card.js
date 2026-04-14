@@ -95,7 +95,11 @@ class RecurringTodosCard extends HTMLElement {
 
   _daysUntilDue(task) {
     if (!task.due) return null;
-    const due = new Date(task.due + "T00:00:00");
+    // Parse as YYYY-MM-DD date parts to avoid timezone shifting
+    const [y, m, d] = task.due.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    const due = new Date(y, m - 1, d);
+    if (isNaN(due.getTime())) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return Math.round((due - today) / (1000 * 60 * 60 * 24));

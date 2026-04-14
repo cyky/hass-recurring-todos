@@ -20,3 +20,9 @@ CONF_DEFAULT_RECURRENCE = "default_recurrence"
 CONF_NOTIFICATION_LEAD_TIME_HOURS = "notification_lead_time_hours"
 CONF_OVERDUE_REMINDER_INTERVAL_HOURS = "overdue_reminder_interval_hours"
 CONF_NOTIFY_DEVICES = "notify_devices"
+
+# Runtime data keys
+DATA_STORE = "store"
+DATA_ENTRY_IDS = "entry_ids"
+DATA_NOTIFY_UNSUBS = "notify_unsubs"
+DATA_CARD_REGISTERED = "card_registered"

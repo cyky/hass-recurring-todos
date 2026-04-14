@@ -222,6 +222,21 @@ async def test_card_registered_once_with_multiple_entries(hass: HomeAssistant):
     assert len(extra_urls) == 1
 
 
+async def test_unload_entry_with_missing_domain_data(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+):
+    """Test that async_unload_entry handles missing domain data gracefully."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Simulate domain data already cleaned up (e.g. double unload)
+    hass.data.pop(DOMAIN, None)
+
+    # Should return True without raising
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+
+
 async def test_remove_entry_cleans_stored_data(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry,
 ):

@@ -39,8 +39,21 @@ CONFIG_SCHEMA = vol.Schema(
     }
 )
 
+async def _validate_user_input(
+    handler: SchemaCommonFlowHandler, user_input: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate user input and set unique_id to prevent duplicate lists."""
+    name = user_input[CONF_NAME]
+    await handler.parent_handler.async_set_unique_id(name.lower())
+    handler.parent_handler._abort_if_unique_id_configured()
+    return user_input
+
+
 CONFIG_FLOW = {
-    "user": SchemaFlowFormStep(schema=CONFIG_SCHEMA),
+    "user": SchemaFlowFormStep(
+        schema=CONFIG_SCHEMA,
+        validate_user_input=_validate_user_input,
+    ),
 }
 
 

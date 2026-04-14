@@ -11,11 +11,16 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DATA_CARD_REGISTERED,
+    DATA_ENTRY_IDS,
+    DATA_NOTIFY_UNSUBS,
+    DATA_STORE,
     DOMAIN,
     PLATFORMS,
     SERVICE_COMPLETE_TASK,
@@ -25,14 +30,9 @@ from .const import (
     SIGNAL_STORE_UPDATED,
 )
 from .notify import NotificationChecker
-from .recurrence import calculate_next_due
+from .recurrence import calculate_next_due, validate_rrule
 from .model import TaskItem
 from .store import RecurringTodosStore
-
-DATA_STORE = "store"
-DATA_ENTRY_IDS = "entry_ids"
-DATA_NOTIFY_UNSUBS = "notify_unsubs"
-DATA_CARD_REGISTERED = "card_registered"
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
     {
@@ -145,13 +145,20 @@ async def _async_handle_create_task(hass: HomeAssistant, call: ServiceCall) -> N
     store, entry_id = _resolve_store(hass, call.data["entity_id"])
 
     due_date_str = call.data.get("due_date")
-    due_date = date.fromisoformat(due_date_str) if due_date_str else None
+    try:
+        due_date = date.fromisoformat(due_date_str) if due_date_str else None
+    except ValueError as err:
+        raise ValueError(f"Invalid due_date: {due_date_str!r}: {err}") from err
+
+    rrule = call.data.get("rrule") or None
+    if rrule is not None:
+        validate_rrule(rrule)
 
     task = TaskItem(
         name=call.data["name"],
         description=call.data.get("description"),
         due_date=due_date,
-        rrule=call.data.get("rrule") or None,
+        rrule=rrule,
     )
     await store.async_add_item(entry_id, task)
     _async_refresh_entity(hass, call.data["entity_id"])
@@ -173,9 +180,15 @@ async def _async_handle_update_task(hass: HomeAssistant, call: ServiceCall) -> N
         task.description = call.data["description"]
     if "due_date" in call.data:
         due_str = call.data["due_date"]
-        task.due_date = date.fromisoformat(due_str) if due_str else None
+        try:
+            task.due_date = date.fromisoformat(due_str) if due_str else None
+        except ValueError as err:
+            raise ValueError(f"Invalid due_date: {due_str!r}: {err}") from err
     if "rrule" in call.data:
-        task.rrule = call.data["rrule"] or None
+        rrule = call.data["rrule"] or None
+        if rrule is not None:
+            validate_rrule(rrule)
+        task.rrule = rrule
 
     await store.async_update_item(entry_id, task)
     _async_refresh_entity(hass, call.data["entity_id"])
@@ -198,17 +211,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not hass.services.has_service(DOMAIN, SERVICE_COMPLETE_TASK):
 
+        async def _wrap_service(coro, call: ServiceCall) -> None:
+            try:
+                await coro(hass, call)
+            except ValueError as err:
+                raise ServiceValidationError(str(err)) from err
+
         async def handle_complete(call: ServiceCall) -> None:
-            await _async_handle_complete_task(hass, call)
+            await _wrap_service(_async_handle_complete_task, call)
 
         async def handle_snooze(call: ServiceCall) -> None:
-            await _async_handle_snooze_task(hass, call)
+            await _wrap_service(_async_handle_snooze_task, call)
 
         async def handle_create(call: ServiceCall) -> None:
-            await _async_handle_create_task(hass, call)
+            await _wrap_service(_async_handle_create_task, call)
 
         async def handle_update(call: ServiceCall) -> None:
-            await _async_handle_update_task(hass, call)
+            await _wrap_service(_async_handle_update_task, call)
 
         hass.services.async_register(
             DOMAIN,
@@ -257,7 +276,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    domain_data = hass.data[DOMAIN]
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is None:
+        return True
 
     unsub = domain_data[DATA_NOTIFY_UNSUBS].pop(entry.entry_id, None)
     if unsub is not None:

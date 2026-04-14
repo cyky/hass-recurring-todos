@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from custom_components.recurring_todos.recurrence import calculate_next_due
+from custom_components.recurring_todos.recurrence import calculate_next_due, validate_rrule
 
 
 def test_daily_rrule_returns_next_day():
@@ -62,3 +62,19 @@ def test_returns_date_not_datetime():
 def test_invalid_rrule_raises():
     with pytest.raises(Exception):
         calculate_next_due("NOT_A_VALID_RRULE", date(2026, 1, 1))
+
+
+def test_validate_rrule_valid():
+    validate_rrule("FREQ=DAILY")
+    validate_rrule("RRULE:FREQ=WEEKLY;BYDAY=MO")
+    validate_rrule("FREQ=MONTHLY;INTERVAL=2")
+
+
+def test_validate_rrule_invalid():
+    with pytest.raises(ValueError, match="Invalid RRULE"):
+        validate_rrule("NOT_VALID")
+
+
+def test_validate_rrule_invalid_with_prefix():
+    with pytest.raises(ValueError, match="Invalid RRULE"):
+        validate_rrule("RRULE:GARBAGE")

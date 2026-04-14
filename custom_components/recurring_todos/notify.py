@@ -18,6 +18,7 @@ from .const import (
     CONF_NOTIFICATION_LEAD_TIME_HOURS,
     CONF_NOTIFY_DEVICES,
     CONF_OVERDUE_REMINDER_INTERVAL_HOURS,
+    DATA_STORE,
     DOMAIN,
     NOTIFICATION_CHECK_INTERVAL,
 )
@@ -56,7 +57,7 @@ class NotificationChecker:
         domain_data = self._hass.data.get(DOMAIN)
         if domain_data is None:
             return
-        store = domain_data.get("store")
+        store = domain_data.get(DATA_STORE)
         if store is None:
             return
 

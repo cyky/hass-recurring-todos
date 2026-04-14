@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 from uuid import uuid4
 
 from homeassistant.components.todo import TodoItemStatus
@@ -20,7 +21,7 @@ class TaskItem:
     status: TodoItemStatus = TodoItemStatus.NEEDS_ACTION
     due_date: date | None = None
     rrule: str | None = None
-    completion_history: list[dict] = field(default_factory=list)
+    completion_history: list[dict[str, str]] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: dt_util.now().isoformat())
 
     @property
@@ -33,7 +34,7 @@ class TaskItem:
             and self.status != TodoItemStatus.COMPLETED
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dict for storage."""
         return {
             "uid": self.uid,
@@ -47,7 +48,7 @@ class TaskItem:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> TaskItem:
+    def from_dict(cls, data: dict[str, Any]) -> TaskItem:
         """Deserialize from storage dict."""
         return cls(
             uid=data["uid"],
