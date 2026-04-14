@@ -92,6 +92,24 @@ async def test_card_js_not_registered_without_frontend(
     assert "frontend_extra_module_url" not in hass.data
 
 
+async def test_card_js_registered_when_frontend_loads_after_setup(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+):
+    """Test that card JS is registered via deferred event when frontend loads after setup."""
+    # Setup without frontend present
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Frontend loads after integration setup
+    hass.data["frontend_extra_module_url"] = set()
+    hass.config.components.add("frontend")
+    hass.bus.async_fire("component_loaded", {"component": "frontend"})
+    await hass.async_block_till_done()
+
+    assert CARD_URL_CACHE_BUST in hass.data["frontend_extra_module_url"]
+
+
 async def test_card_js_has_custom_cards_registration():
     """Test that the card JS registers itself in window.customCards."""
     content = CARD_PATH.read_text()

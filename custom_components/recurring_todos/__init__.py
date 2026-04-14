@@ -10,7 +10,8 @@ import voluptuous as vol
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.const import EVENT_COMPONENT_LOADED
+from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -258,13 +259,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.http.async_register_static_paths(
                 [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
             )
+            hass.data[DATA_CARD_REGISTERED] = True
 
-            if "frontend" in hass.config.components:
+            async def _add_js_url() -> None:
                 from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
 
                 add_extra_js_url(hass, CARD_URL_CACHE_BUST)
 
-            hass.data[DATA_CARD_REGISTERED] = True
+            if "frontend" in hass.config.components:
+                await _add_js_url()
+            else:
+                @callback
+                def _on_component_loaded(event: Event) -> None:
+                    if event.data.get("component") == "frontend":
+                        _unsub()
+                        hass.async_create_task(_add_js_url())
+
+                _unsub = hass.bus.async_listen(EVENT_COMPONENT_LOADED, _on_component_loaded)
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()
