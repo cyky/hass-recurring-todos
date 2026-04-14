@@ -32,6 +32,7 @@ from .store import RecurringTodosStore
 DATA_STORE = "store"
 DATA_ENTRY_IDS = "entry_ids"
 DATA_NOTIFY_UNSUBS = "notify_unsubs"
+DATA_CARD_REGISTERED = "card_registered"
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
     {
@@ -234,13 +235,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             schema=SERVICE_SCHEMA_UPDATE,
         )
 
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
-        )
+        if not hass.data.get(DATA_CARD_REGISTERED):
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
+            )
 
-        from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
+            if "frontend" in hass.config.components:
+                from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
 
-        add_extra_js_url(hass, CARD_URL_CACHE_BUST)
+                add_extra_js_url(hass, CARD_URL_CACHE_BUST)
+
+            hass.data[DATA_CARD_REGISTERED] = True
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()
@@ -275,3 +280,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     domain_data = hass.data.get(DOMAIN)
     if domain_data is not None and domain_data[DATA_STORE] is not None:
         await domain_data[DATA_STORE].async_remove_entry(entry.entry_id)
+    else:
+        # Store was cleaned up on last unload — create a temporary one
+        store = RecurringTodosStore(hass)
+        await store.async_load()
+        await store.async_remove_entry(entry.entry_id)
