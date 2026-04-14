@@ -1,71 +1,63 @@
-# Architecture — Recurring Todos
+# Architecture
 
 ## Module Map
 
 | File | Purpose |
 |------|---------|
-| `const.py` | Domain name, platform list, storage keys, service names, option keys, intervals |
-| `model.py` | `TaskItem` dataclass — fields, serialization, `is_overdue` property |
-| `store.py` | `RecurringTodosStore` — wraps HA `Store` for JSON persistence, CRUD by entry ID |
+| `const.py` | Domain, platform list, storage keys, service/option/interval constants |
+| `model.py` | `TaskItem` dataclass — fields, serialization, `is_overdue` |
+| `store.py` | `RecurringTodosStore` — HA `Store` wrapper, CRUD by entry ID |
 | `recurrence.py` | `calculate_next_due()` — RRULE parsing via python-dateutil |
-| `config_flow.py` | `SchemaConfigFlowHandler` — user step (list name) + options flow (recurrence/notification settings) |
-| `todo.py` | `RecurringTodosListEntity` — TodoListEntity with CRUD, overdue event firing |
-| `notify.py` | `NotificationChecker` — periodic push notifications for due/overdue tasks |
-| `__init__.py` | Entry setup/teardown, service registration (complete_task, snooze_task) |
-| `www/recurring-todos-card.js` | Custom Lovelace card — task list UI, recurrence form, RRULE builder |
+| `config_flow.py` | `SchemaConfigFlowHandler` — user step + options flow |
+| `todo.py` | `RecurringTodosListEntity` — TodoListEntity, CRUD, overdue event firing |
+| `notify.py` | `NotificationChecker` — periodic push for due/overdue tasks |
+| `__init__.py` | Entry setup/teardown, service registration |
+| `www/recurring-todos-card.js` | Custom Lovelace card |
 
-## Data Flow: Task Creation
+## Data Flow
 
+**Task creation:**
 ```
-User (Lovelace card or HA UI)
-  → todo.add_item service
-  → RecurringTodosListEntity.async_create_todo_item()
+User → todo.add_item → RecurringTodosListEntity.async_create_todo_item()
   → TaskItem(name, due_date, status=NEEDS_ACTION)
-  → store.async_add_item(entry_id, task)
-  → Store.async_save() → .storage/recurring_todos.storage
+  → store.async_add_item(entry_id, task) → .storage/recurring_todos.storage
 ```
 
-## Data Flow: Completion with Recurrence
-
+**Completion with recurrence:**
 ```
-User completes task
-  → recurring_todos.complete_task service (or todo entity update)
-  → If task.rrule is set:
-      1. Append {completed_at} to task.completion_history
-      2. calculate_next_due(rrule, current_due_date) → next date
-      3. task.due_date = next date
-      4. task.status = NEEDS_ACTION (reset)
-  → If no rrule:
-      task.status = COMPLETED (stays done)
+complete_task service (or entity update)
+  → If rrule: append to completion_history, calculate_next_due(), reset NEEDS_ACTION
+  → If no rrule: status = COMPLETED (stays done)
   → store.async_update_item() → persist
 ```
 
-## Data Flow: Notification Cycle
-
+**Notifications** (every 30 min):
 ```
-async_track_time_interval (every 30 min)
-  → NotificationChecker._async_check_and_notify()
-  → Read entry.options: devices, lead_time, interval
-  → For each task in store.get_items(entry_id):
-      _should_notify(task, now, options)?
-        - Has due_date? Not completed?
-        - Within lead_time window or overdue?
-        - Not recently notified (rate limit)?
-      → Yes: hass.services.async_call("notify", device, {title, message})
-      → Update _last_notified[task.uid] = now
+NotificationChecker._async_check_and_notify()
+  → For each task: within lead_time or overdue? Not recently notified?
+  → Yes: hass.services.async_call("notify", device, {title, message})
 ```
 
-## Data Flow: Overdue Detection
+**Overdue detection** (every 5 min):
+```
+_async_check_overdue() → filter tasks where is_overdue
+  → Fire "recurring_todos_overdue" event, update entity state
+```
+
+## Runtime Data
 
 ```
-async_track_time_interval (every 5 min, in todo.py)
-  → _async_check_overdue()
-  → Filter tasks where is_overdue (due_date < today, not completed)
-  → If any: hass.bus.async_fire("recurring_todos_overdue", payload)
-  → async_write_ha_state() to update entity attributes
+hass.data["recurring_todos"] = {
+    "store": RecurringTodosStore,
+    "entry_ids": set[str],
+    "notify_unsubs": dict[str, Callable],
+    "card_registered": bool,
+}
 ```
 
 ## Storage Schema (v1)
+
+File: `.storage/recurring_todos.storage`
 
 ```json
 {
@@ -84,22 +76,10 @@ async_track_time_interval (every 5 min, in todo.py)
 }
 ```
 
-File: `.storage/recurring_todos.storage`
-
-## Runtime Data Layout
-
-```
-hass.data["recurring_todos"] = {
-    "<entry_id>": RecurringTodosStore,
-    "<entry_id>_notify_unsub": Callable,  # cancel notification checker
-}
-```
-
-## Key Design Decisions
+## Design Decisions
 
 1. **1 config entry = 1 task list** — multiple lists via multiple entries, each with own options
-2. **Completion history never pruned** — full audit trail, no TTL
-3. **In-memory last_notified** — lost on restart (acceptable: re-notifies once after restart)
-4. **Options read fresh each cycle** — no update listener needed, changes take effect next check
-5. **Overdue events separate from notifications** — events serve automations, notifications serve humans
-6. **No HA runtime dependency for tests** — conftest shims HA modules for standalone pytest
+2. **Completion history never pruned** — full audit trail
+3. **In-memory last_notified** — lost on restart (re-notifies once, acceptable)
+4. **Options read fresh each cycle** — no update listener needed
+5. **Overdue events separate from notifications** — events for automations, notifications for humans

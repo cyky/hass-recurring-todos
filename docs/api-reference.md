@@ -1,4 +1,4 @@
-# API Reference — Recurring Todos
+# API Reference
 
 ## Services
 
@@ -8,7 +8,7 @@ Mark a task as completed. Recurring tasks advance to next due date; one-off task
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `entity_id` | string | yes | Todo list entity (e.g. `todo.household_chores`) |
+| `entity_id` | string | yes | Todo list entity |
 | `task_uid` | string | yes | Task UUID |
 
 ### `recurring_todos.snooze_task`
@@ -19,7 +19,7 @@ Push a task's due date forward.
 |-----------|------|----------|---------|-------------|
 | `entity_id` | string | yes | — | Todo list entity |
 | `task_uid` | string | yes | — | Task UUID |
-| `days` | int | no | 1 | Days to snooze (1–365) |
+| `days` | int | no | 1 | Days to snooze (1-365) |
 
 ### `recurring_todos.create_task`
 
@@ -35,7 +35,7 @@ Create a new task with optional recurrence.
 
 ### `recurring_todos.update_task`
 
-Update an existing task's fields. Only provided fields are changed.
+Update an existing task. Only provided fields are changed.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -48,53 +48,36 @@ Update an existing task's fields. Only provided fields are changed.
 
 ## Entity Attributes
 
-Entity domain: `todo`, integration: `recurring_todos`
-
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `todo_items` | list[dict] | All tasks: `{uid, summary, description, status, due, rrule}` |
+| `todo_items` | list | All tasks: `{uid, summary, description, status, due, rrule}` |
 | `overdue_count` | int | Number of overdue tasks |
-| `overdue_tasks` | list[dict] | Overdue tasks: `{uid, name, due_date}` |
-| `tasks_detail` | list[dict] | Task metadata: `{uid, name, rrule, completion_count}` |
+| `overdue_tasks` | list | Overdue tasks: `{uid, name, due_date}` |
+| `tasks_detail` | list | Per-task metadata: `{uid, name, rrule, completion_count, completion_history}` |
 
 ## Events
 
 ### `recurring_todos_overdue`
 
-Fired every 5 minutes when overdue tasks exist. Usable as automation trigger.
+Fired every 5 minutes when overdue tasks exist.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `entity_id` | string | Todo list entity |
 | `entry_id` | string | Config entry ID |
-| `overdue_tasks` | list[dict] | `{uid, name, due_date, days_overdue}` |
+| `overdue_tasks` | list | `{uid, name, due_date, days_overdue}` |
 | `overdue_count` | int | Total overdue count |
 
-## Config Entry Options
+## Config Options
 
-Set via Settings > Devices & Services > Recurring Todos > Configure.
+Set via **Settings > Devices & Services > Recurring Todos > Configure**.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `default_recurrence` | string | `""` | RRULE template for new tasks |
 | `notification_lead_time_hours` | int | 24 | Hours before due to first notify |
 | `overdue_reminder_interval_hours` | int | 12 | Hours between re-notifications |
-| `notify_devices` | list[string] | `[]` | mobile_app notify service names |
-
-## TaskItem Model
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `uid` | string | UUID v4, auto-generated |
-| `name` | string | Task name |
-| `description` | string\|null | Optional description |
-| `status` | `needs_action`\|`completed` | Current state |
-| `due_date` | date\|null | ISO 8601 date |
-| `rrule` | string\|null | iCal RRULE (null = one-off) |
-| `completion_history` | list[dict] | `[{completed_at: ISO8601}]`, never pruned |
-| `created_at` | string | ISO 8601 datetime |
-
-Computed: `is_overdue` — `True` when `due_date < today` and `status != completed`
+| `notify_devices` | list | `[]` | `notify.*` service names |
 
 ## RRULE Examples
 
@@ -105,7 +88,6 @@ Computed: `is_overdue` — `True` when `due_date < today` and `status != complet
 | Weekdays | `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` |
 | Weekly on Monday | `FREQ=WEEKLY;BYDAY=MO` |
 | Biweekly | `FREQ=WEEKLY;INTERVAL=2` |
-| Monthly (same day) | `FREQ=MONTHLY` |
-| Monthly 1st | `FREQ=MONTHLY;BYMONTHDAY=1` |
+| Monthly on same day | `FREQ=MONTHLY` |
 | Quarterly | `FREQ=MONTHLY;INTERVAL=3` |
 | Yearly | `FREQ=YEARLY` |
