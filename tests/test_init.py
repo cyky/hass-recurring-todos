@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant import config_entries
@@ -72,13 +74,63 @@ async def test_card_js_file_exists():
     assert CARD_PATH.is_file(), f"Card JS missing: {CARD_PATH}"
 
 
+async def test_card_js_has_custom_cards_registration():
+    """Test that the card JS registers itself in window.customCards."""
+    content = CARD_PATH.read_text()
+    assert "window.customCards" in content, "Card JS missing window.customCards registration"
+    assert "recurring-todos-card" in content, "Card JS missing card type declaration"
+
+
+async def test_manifest_has_frontend_hard_dependency():
+    """frontend must be a hard dependency so Lovelace is ready when async_setup runs."""
+    manifest_path = Path(__file__).parent.parent / "custom_components" / "recurring_todos" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    assert "frontend" in manifest.get("dependencies", []), (
+        "frontend must be in 'dependencies', not 'after_dependencies', "
+        "so Lovelace data is available when the integration sets up."
+    )
+    assert "frontend" not in manifest.get("after_dependencies", [])
+
+
+async def test_async_setup_registers_lovelace_resource(hass: HomeAssistant):
+    """async_setup must register the card as a Lovelace resource."""
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.recurring_todos import async_setup
+
+    col = _make_resource_col()
+    _patch_lovelace(hass, col)
+
+    http_mock = MagicMock()
+    http_mock.async_register_static_paths = AsyncMock()
+    hass.http = http_mock
+
+    result = await async_setup(hass, {})
+
+    assert result is True
+    col.async_create_item.assert_awaited_once_with(
+        {"res_type": "module", "url": CARD_URL_CACHE_BUST}
+    )
+
+
+async def test_async_setup_registers_frontend_module(hass: HomeAssistant):
+    """async_setup must call add_extra_js_url with the cache-bust URL."""
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.recurring_todos import async_setup
+
+    http_mock = MagicMock()
+    http_mock.async_register_static_paths = AsyncMock()
+    hass.http = http_mock
+
+    await async_setup(hass, {})
+
+    assert CARD_URL_CACHE_BUST in hass.data["frontend_extra_module_url"]
+
+
 async def test_card_js_registered_as_frontend_module(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry,
 ):
-    """Test that the card JS is registered via add_extra_js_url after setup."""
-    # Simulate frontend being loaded (initializes the data key that add_extra_js_url needs)
+    """Card URL is present in frontend modules after full entry setup."""
     hass.data["frontend_extra_module_url"] = set()
-    hass.config.components.add("frontend")
 
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -88,39 +140,6 @@ async def test_card_js_registered_as_frontend_module(
     assert CARD_URL_CACHE_BUST in extra_urls, (
         f"Card URL {CARD_URL_CACHE_BUST} not in frontend modules: {extra_urls}"
     )
-
-
-async def test_card_js_not_registered_without_frontend(
-    hass: HomeAssistant, mock_setup_entry,
-):
-    """Test that setup succeeds even when frontend is not loaded."""
-    assert mock_setup_entry.state is config_entries.ConfigEntryState.LOADED
-    assert "frontend_extra_module_url" not in hass.data
-
-
-async def test_card_js_registered_when_frontend_loads_after_setup(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry,
-):
-    """Test that card JS is registered via deferred event when frontend loads after setup."""
-    # Setup without frontend present
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    # Frontend loads after integration setup
-    hass.data["frontend_extra_module_url"] = set()
-    hass.config.components.add("frontend")
-    hass.bus.async_fire("component_loaded", {"component": "frontend"})
-    await hass.async_block_till_done()
-
-    assert CARD_URL_CACHE_BUST in hass.data["frontend_extra_module_url"]
-
-
-async def test_card_js_has_custom_cards_registration():
-    """Test that the card JS registers itself in window.customCards."""
-    content = CARD_PATH.read_text()
-    assert "window.customCards" in content, "Card JS missing window.customCards registration"
-    assert "recurring-todos-card" in content, "Card JS missing card type declaration"
 
 
 # --- Multi-entry edge cases ---
@@ -229,7 +248,6 @@ async def test_notify_unsub_removed_on_unload(
 async def test_card_registered_once_with_multiple_entries(hass: HomeAssistant):
     """Test that card JS URL is registered only once even with multiple entries."""
     hass.data["frontend_extra_module_url"] = set()
-    hass.config.components.add("frontend")
 
     entry1 = _make_entry("entry_1", "List A")
     entry1.add_to_hass(hass)

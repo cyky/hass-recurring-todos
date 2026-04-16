@@ -10,15 +10,13 @@ import voluptuous as vol
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_COMPONENT_LOADED
-from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    DATA_CARD_REGISTERED,
     DATA_ENTRY_IDS,
     DATA_NOTIFY_UNSUBS,
     DATA_STORE,
@@ -252,6 +250,21 @@ async def _async_handle_update_task(hass: HomeAssistant, call: ServiceCall) -> N
     _async_refresh_entity(hass, call.data["entity_id"])
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register the card JS once when the integration module is loaded."""
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
+    )
+
+    await _sync_lovelace_resource(hass)
+
+    from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
+
+    add_extra_js_url(hass, CARD_URL_CACHE_BUST)
+
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Recurring Todos from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {
@@ -311,32 +324,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             handle_update,
             schema=SERVICE_SCHEMA_UPDATE,
         )
-
-        if not hass.data.get(DATA_CARD_REGISTERED):
-            await hass.http.async_register_static_paths(
-                [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=True)]
-            )
-            hass.data[DATA_CARD_REGISTERED] = True
-
-            # Lovelace resources are awaited before views render — no race condition.
-            await _sync_lovelace_resource(hass)
-
-            # add_extra_js_url keeps the card visible in the Lovelace card editor.
-            async def _add_js_url() -> None:
-                from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
-
-                add_extra_js_url(hass, CARD_URL_CACHE_BUST)
-
-            if "frontend" in hass.config.components:
-                await _add_js_url()
-            else:
-                @callback
-                def _on_component_loaded(event: Event) -> None:
-                    if event.data.get("component") == "frontend":
-                        _unsub()
-                        hass.async_create_task(_add_js_url())
-
-                _unsub = hass.bus.async_listen(EVENT_COMPONENT_LOADED, _on_component_loaded)
 
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()

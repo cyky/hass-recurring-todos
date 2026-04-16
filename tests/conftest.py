@@ -17,6 +17,17 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+@pytest.fixture(autouse=True)
+def mock_frontend(hass: HomeAssistant) -> None:
+    """Mark frontend as loaded and seed its data key.
+
+    Prevents HA from trying to load the real frontend component (which needs
+    the hass_frontend package) while still allowing add_extra_js_url to work.
+    """
+    hass.config.components.add("frontend")
+    hass.data.setdefault("frontend_extra_module_url", set())
+
+
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
     """Create a mock config entry for recurring_todos."""
@@ -32,7 +43,7 @@ def mock_config_entry() -> MockConfigEntry:
 
 @pytest.fixture
 async def mock_setup_entry(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_frontend
 ) -> MockConfigEntry:
     """Set up a config entry and return it."""
     mock_config_entry.add_to_hass(hass)
