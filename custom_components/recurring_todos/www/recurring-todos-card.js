@@ -38,6 +38,15 @@ class RecurringTodosCard extends HTMLElement {
     this._editTask = null;
     this._historyTask = null;
     this._renderScheduled = false;
+    this._lastStateSig = null;
+  }
+
+  _stateSignature() {
+    const state = this._getState();
+    if (!state) return "none";
+    const items = state.attributes?.todo_items || [];
+    const detail = state.attributes?.tasks_detail || [];
+    return JSON.stringify({ items, detail });
   }
 
   setConfig(config) {
@@ -51,6 +60,9 @@ class RecurringTodosCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._view === "add" || this._view === "edit") return;
+    const sig = this._stateSignature();
+    if (sig === this._lastStateSig) return;
+    this._lastStateSig = sig;
     this._scheduleRender();
   }
 

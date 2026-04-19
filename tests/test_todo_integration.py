@@ -88,6 +88,26 @@ async def test_complete_oneoff_task(hass: HomeAssistant, mock_setup_entry):
     assert completed.status == TodoItemStatus.COMPLETED
 
 
+async def test_complete_oneoff_task_toggles_back(hass: HomeAssistant, mock_setup_entry):
+    """Completing a one-off task twice toggles it back to needs_action."""
+    store = hass.data[DOMAIN]["store"]
+
+    task = TaskItem(name="Toggle me", due_date=date.today(), rrule=None)
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    for _ in range(2):
+        await hass.services.async_call(
+            DOMAIN,
+            "complete_task",
+            {"entity_id": "todo.test_list", "task_uid": task.uid},
+            blocking=True,
+        )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    toggled = next(t for t in items if t.uid == task.uid)
+    assert toggled.status == TodoItemStatus.NEEDS_ACTION
+
+
 async def test_snooze_task(hass: HomeAssistant, mock_setup_entry):
     """Test that snoozing a task pushes the due date forward."""
     store = hass.data[DOMAIN]["store"]

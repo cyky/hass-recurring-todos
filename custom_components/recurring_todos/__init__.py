@@ -173,6 +173,8 @@ async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) ->
             task.rrule, task.due_date or dt_util.now().date()
         )
         task.status = TodoItemStatus.NEEDS_ACTION
+    elif task.status == TodoItemStatus.COMPLETED:
+        task.status = TodoItemStatus.NEEDS_ACTION
     else:
         task.status = TodoItemStatus.COMPLETED
 
