@@ -1,13 +1,3 @@
-/**
- * Recurring Todos — Custom Lovelace Card
- *
- * Displays a task list with due dates, overdue highlighting,
- * add/edit forms with recurrence UI, and completion history.
- *
- * Security: All user-supplied strings are escaped via _esc() which
- * uses textContent-based sanitization before insertion into templates.
- */
-
 const DAYS_OF_WEEK = [
   { value: "MO", label: "Mon" },
   { value: "TU", label: "Tue" },
@@ -18,6 +8,26 @@ const DAYS_OF_WEEK = [
   { value: "SU", label: "Sun" },
 ];
 
+const REQUIRED_HA_ELEMENTS = [
+  "ha-card",
+  "ha-icon",
+  "ha-icon-button",
+  "ha-textfield",
+  "ha-select",
+  "ha-button",
+  "mwc-list-item",
+];
+
+let _haElementsReady = null;
+function haElementsReady() {
+  if (_haElementsReady === null) {
+    _haElementsReady = Promise.all(
+      REQUIRED_HA_ELEMENTS.map((name) => customElements.whenDefined(name))
+    );
+  }
+  return _haElementsReady;
+}
+
 class RecurringTodosCard extends HTMLElement {
   constructor() {
     super();
@@ -27,6 +37,7 @@ class RecurringTodosCard extends HTMLElement {
     this._view = "list"; // list | add | edit | history
     this._editTask = null;
     this._historyTask = null;
+    this._renderScheduled = false;
   }
 
   setConfig(config) {
@@ -34,14 +45,13 @@ class RecurringTodosCard extends HTMLElement {
       throw new Error("Please define an entity");
     }
     this._config = config;
-    this._render();
+    this._scheduleRender();
   }
 
   set hass(hass) {
     this._hass = hass;
-    // Skip re-render while user is on a form to avoid destroying inputs mid-typing
     if (this._view === "add" || this._view === "edit") return;
-    this._render();
+    this._scheduleRender();
   }
 
   getCardSize() {
@@ -56,7 +66,15 @@ class RecurringTodosCard extends HTMLElement {
     return { entity: "" };
   }
 
-  // --- Data helpers ---
+  _scheduleRender() {
+    if (this._renderScheduled) return;
+    if (!this._hass || !this._config.entity) return;
+    this._renderScheduled = true;
+    haElementsReady().then(() => {
+      this._renderScheduled = false;
+      this._render();
+    });
+  }
 
   _getState() {
     if (!this._hass || !this._config.entity) return null;
@@ -95,7 +113,6 @@ class RecurringTodosCard extends HTMLElement {
 
   _daysUntilDue(task) {
     if (!task.due) return null;
-    // Parse as YYYY-MM-DD date parts to avoid timezone shifting
     const [y, m, d] = task.due.split("-").map(Number);
     if (!y || !m || !d) return null;
     const due = new Date(y, m - 1, d);
@@ -104,8 +121,6 @@ class RecurringTodosCard extends HTMLElement {
     today.setHours(0, 0, 0, 0);
     return Math.round((due - today) / (1000 * 60 * 60 * 24));
   }
-
-  // --- RRULE helpers ---
 
   _buildRrule(freq, interval, days) {
     if (freq === "none") return "";
@@ -138,22 +153,19 @@ class RecurringTodosCard extends HTMLElement {
     return map[freq] || "";
   }
 
-  /**
-   * Create a button with an ha-icon child.
-   * Uses plain <button> + ha-icon for reliable rendering across HA versions.
-   */
   _iconButton(icon, { title, className, onClick } = {}) {
-    const btn = document.createElement("button");
-    btn.className = "icon-btn" + (className ? " " + className : "");
-    if (title) btn.title = title;
+    const btn = document.createElement("ha-icon-button");
+    if (className) btn.className = className;
+    if (title) {
+      btn.setAttribute("label", title);
+      btn.setAttribute("title", title);
+    }
     if (onClick) btn.addEventListener("click", onClick);
     const iconEl = document.createElement("ha-icon");
     iconEl.setAttribute("icon", icon);
     btn.appendChild(iconEl);
     return btn;
   }
-
-  // --- Service calls ---
 
   async _completeTask(uid) {
     await this._hass.callService("recurring_todos", "complete_task", {
@@ -202,29 +214,12 @@ class RecurringTodosCard extends HTMLElement {
     });
   }
 
-  // --- Text sanitization ---
-
-  /**
-   * Escape user-supplied strings for safe insertion into HTML templates.
-   * Uses textContent-based encoding to prevent XSS.
-   */
-  _esc(str) {
-    if (!str) return "";
-    const el = document.createElement("span");
-    el.textContent = str;
-    return el.innerHTML;
-  }
-
-  // --- Rendering via safe DOM construction ---
-
   _render() {
     if (!this.shadowRoot || !this._hass) return;
     const root = this.shadowRoot;
 
-    // Clear previous content
     while (root.firstChild) root.removeChild(root.firstChild);
 
-    // Add styles
     const style = document.createElement("style");
     style.textContent = this._getStyles();
     root.appendChild(style);
@@ -241,7 +236,6 @@ class RecurringTodosCard extends HTMLElement {
       return;
     }
 
-    // Header
     const header = document.createElement("div");
     header.className = "card-header";
 
@@ -266,7 +260,6 @@ class RecurringTodosCard extends HTMLElement {
 
     card.appendChild(header);
 
-    // Content
     const content = document.createElement("div");
     content.className = "card-content";
 
@@ -319,7 +312,6 @@ class RecurringTodosCard extends HTMLElement {
         + (daysUntil === 0 && !overdue ? " due-today" : "")
         + (daysUntil === 1 ? " due-tomorrow" : "");
 
-      // Main row
       const main = document.createElement("div");
       main.className = "task-main";
 
@@ -344,7 +336,6 @@ class RecurringTodosCard extends HTMLElement {
       }
       main.appendChild(info);
 
-      // Due label + recurring badge container
       const dueBadges = document.createElement("div");
       dueBadges.className = "due-badges";
 
@@ -372,7 +363,6 @@ class RecurringTodosCard extends HTMLElement {
       main.appendChild(dueBadges);
       taskEl.appendChild(main);
 
-      // Action row — always visible
       const actions = document.createElement("div");
       actions.className = "task-actions";
 
@@ -408,10 +398,12 @@ class RecurringTodosCard extends HTMLElement {
 
     actionsEl.appendChild(this._iconButton("mdi:check", {
       className: "confirm-yes",
+      title: "Confirm delete",
       onClick: () => this._deleteTask(uid),
     }));
     actionsEl.appendChild(this._iconButton("mdi:close", {
       className: "confirm-no",
+      title: "Cancel",
       onClick: () => this._render(),
     }));
   }
@@ -420,92 +412,73 @@ class RecurringTodosCard extends HTMLElement {
     const rrule = task ? this._parseRrule(this._getTaskRrule(task.uid)) : { freq: "none", interval: 1, days: [] };
     const isEdit = !!task;
 
-    const form = document.createElement("form");
-    form.id = "task-form";
+    const form = document.createElement("div");
+    form.className = "form";
 
-    // Name
-    const nameLabel = document.createElement("label");
-    nameLabel.textContent = "Name";
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.name = "name";
+    const nameInput = document.createElement("ha-textfield");
+    nameInput.setAttribute("label", "Name");
+    nameInput.setAttribute("required", "");
     nameInput.value = task?.summary || "";
-    nameInput.required = true;
-    nameLabel.appendChild(nameInput);
-    form.appendChild(nameLabel);
+    form.appendChild(nameInput);
 
-    // Description
-    const descLabel = document.createElement("label");
-    descLabel.textContent = "Description";
-    const descInput = document.createElement("input");
-    descInput.type = "text";
-    descInput.name = "description";
+    const descInput = document.createElement("ha-textfield");
+    descInput.setAttribute("label", "Description");
     descInput.value = task?.description || "";
-    descLabel.appendChild(descInput);
-    form.appendChild(descLabel);
+    form.appendChild(descInput);
 
-    // Due date
-    const dueLabel = document.createElement("label");
-    dueLabel.textContent = "Due date";
-    const dueInput = document.createElement("input");
-    dueInput.type = "date";
-    dueInput.name = "due_date";
+    const dueInput = document.createElement("ha-textfield");
+    dueInput.setAttribute("label", "Due date");
+    dueInput.setAttribute("type", "date");
     dueInput.value = task?.due || "";
-    dueLabel.appendChild(dueInput);
-    form.appendChild(dueLabel);
+    form.appendChild(dueInput);
 
-    // Recurrence fieldset
-    const fieldset = document.createElement("fieldset");
+    const fieldset = document.createElement("div");
     fieldset.className = "recurrence";
-    const legend = document.createElement("legend");
+
+    const legend = document.createElement("div");
+    legend.className = "recurrence-legend";
     legend.textContent = "Recurrence";
     fieldset.appendChild(legend);
 
-    const freqLabel = document.createElement("label");
-    freqLabel.textContent = "Frequency";
-    const freqSelect = document.createElement("select");
-    freqSelect.name = "freq";
-    for (const opt of ["none", "daily", "weekly", "monthly", "yearly"]) {
-      const option = document.createElement("option");
-      option.value = opt;
-      option.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-      if (rrule.freq === opt) option.selected = true;
-      freqSelect.appendChild(option);
+    const freqSelect = document.createElement("ha-select");
+    freqSelect.setAttribute("label", "Frequency");
+    freqSelect.fixedMenuPosition = true;
+    freqSelect.naturalMenuWidth = true;
+    const FREQ_OPTIONS = ["none", "daily", "weekly", "monthly", "yearly"];
+    for (const opt of FREQ_OPTIONS) {
+      const item = document.createElement("mwc-list-item");
+      item.setAttribute("value", opt);
+      item.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+      freqSelect.appendChild(item);
     }
-    freqLabel.appendChild(freqSelect);
-    fieldset.appendChild(freqLabel);
+    freqSelect.value = rrule.freq;
+    fieldset.appendChild(freqSelect);
 
-    // Dynamic interval label
-    const intervalLabel = document.createElement("label");
-    intervalLabel.className = "interval-label";
-    const intervalText = document.createElement("span");
-    intervalText.textContent = rrule.freq === "none"
-      ? "Interval"
-      : "Every N " + this._freqUnitLabel(rrule.freq);
-    intervalLabel.appendChild(intervalText);
-    const intervalInput = document.createElement("input");
-    intervalInput.type = "number";
-    intervalInput.name = "interval";
-    intervalInput.min = "1";
-    intervalInput.max = "99";
+    const intervalInput = document.createElement("ha-textfield");
+    intervalInput.className = "interval-input";
+    intervalInput.setAttribute("type", "number");
+    intervalInput.setAttribute("min", "1");
+    intervalInput.setAttribute("max", "99");
+    intervalInput.setAttribute(
+      "label",
+      rrule.freq === "none" ? "Interval" : "Every N " + this._freqUnitLabel(rrule.freq)
+    );
     intervalInput.value = String(rrule.interval);
-    intervalLabel.appendChild(intervalInput);
-    fieldset.appendChild(intervalLabel);
+    fieldset.appendChild(intervalInput);
 
-    // Day-of-week multi-select
     const daysDiv = document.createElement("div");
     daysDiv.className = "days-select";
-    daysDiv.id = "days-select";
     daysDiv.style.display = rrule.freq === "weekly" ? "flex" : "none";
 
+    const dayCheckboxes = [];
     for (const d of DAYS_OF_WEEK) {
       const chip = document.createElement("label");
       chip.className = "day-chip";
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.name = "days";
       cb.value = d.value;
       if (rrule.days.includes(d.value)) cb.checked = true;
+      dayCheckboxes.push(cb);
       chip.appendChild(cb);
       const span = document.createElement("span");
       span.textContent = d.label;
@@ -515,37 +488,38 @@ class RecurringTodosCard extends HTMLElement {
     fieldset.appendChild(daysDiv);
     form.appendChild(fieldset);
 
-    // Toggle days visibility and update interval label on freq change
-    freqSelect.addEventListener("change", () => {
-      daysDiv.style.display = freqSelect.value === "weekly" ? "flex" : "none";
-      intervalText.textContent = freqSelect.value === "none"
-        ? "Interval"
-        : "Every N " + this._freqUnitLabel(freqSelect.value);
+    freqSelect.addEventListener("selected", (e) => {
+      const idx = e.detail?.index;
+      const freq = typeof idx === "number" && idx >= 0 ? FREQ_OPTIONS[idx] : freqSelect.value;
+      if (!freq) return;
+      daysDiv.style.display = freq === "weekly" ? "flex" : "none";
+      intervalInput.setAttribute(
+        "label",
+        freq === "none" ? "Interval" : "Every N " + this._freqUnitLabel(freq)
+      );
     });
 
-    // Submit
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "submit";
-    submitBtn.className = "btn-submit";
+    const submitBtn = document.createElement("ha-button");
+    submitBtn.setAttribute("raised", "");
     submitBtn.textContent = (isEdit ? "Update" : "Add") + " Task";
     formActions.appendChild(submitBtn);
     form.appendChild(formActions);
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const fd = new FormData(form);
-      const freq = fd.get("freq");
-      const interval = parseInt(fd.get("interval"), 10) || 1;
-      const days = fd.getAll("days");
-      const builtRrule = this._buildRrule(freq, interval, days);
-
+    const submit = async () => {
+      if (!nameInput.value || !nameInput.value.trim()) {
+        nameInput.setAttribute("error", "");
+        nameInput.focus();
+        return;
+      }
+      const days = dayCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      const interval = parseInt(intervalInput.value, 10) || 1;
       const data = {
-        name: fd.get("name"),
-        description: fd.get("description") || "",
-        due_date: fd.get("due_date") || "",
-        rrule: builtRrule,
+        name: nameInput.value.trim(),
+        description: descInput.value || "",
+        due_date: dueInput.value || "",
+        rrule: this._buildRrule(freqSelect.value, interval, days),
       };
 
       if (isEdit) {
@@ -556,7 +530,17 @@ class RecurringTodosCard extends HTMLElement {
       this._view = "list";
       this._editTask = null;
       this._render();
-    });
+    };
+
+    submitBtn.addEventListener("click", submit);
+    for (const el of [nameInput, descInput, dueInput, intervalInput]) {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      });
+    }
 
     container.appendChild(form);
   }
@@ -596,7 +580,6 @@ class RecurringTodosCard extends HTMLElement {
       view.appendChild(desc);
     }
 
-    // Show actual completion history
     const detail = this._getTaskDetail(task.uid);
     const history = detail?.completion_history || [];
 
@@ -613,7 +596,6 @@ class RecurringTodosCard extends HTMLElement {
 
       const list = document.createElement("ul");
       list.className = "history-list";
-      // Show most recent first, cap at 50
       const recent = [...history].reverse().slice(0, 50);
       for (const entry of recent) {
         const li = document.createElement("li");
@@ -640,12 +622,9 @@ class RecurringTodosCard extends HTMLElement {
     container.appendChild(view);
   }
 
-  // --- Styles ---
-
   _getStyles() {
     return `
       :host {
-        --card-bg: var(--ha-card-background, var(--card-background-color, #fff));
         --text-primary: var(--primary-text-color, #212121);
         --text-secondary: var(--secondary-text-color, #727272);
         --accent: var(--primary-color, #03a9f4);
@@ -657,37 +636,16 @@ class RecurringTodosCard extends HTMLElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 16px 16px 0;
+        padding: 12px 8px 4px 16px;
         font-size: 1.2em;
         font-weight: 500;
         color: var(--text-primary);
       }
-      .icon-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 6px;
-        border-radius: 50%;
-        color: var(--text-secondary);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 0;
-      }
-      .icon-btn:hover {
-        background: rgba(0,0,0,0.06);
-      }
-      .icon-btn ha-icon {
-        --mdc-icon-size: 20px;
-      }
       .card-header .header-btn {
         color: var(--accent);
       }
-      .card-header .header-btn ha-icon {
-        --mdc-icon-size: 22px;
-      }
       .card-content {
-        padding: 12px 16px 16px;
+        padding: 8px 16px 16px;
       }
       .empty {
         text-align: center;
@@ -765,23 +723,18 @@ class RecurringTodosCard extends HTMLElement {
         color: var(--warning);
         font-weight: 500;
       }
-      .btn-complete {
-        flex-shrink: 0;
-      }
-      .btn-complete ha-icon {
-        --mdc-icon-size: 22px;
-      }
       .task.completed .btn-complete {
         color: var(--accent);
       }
       .task-actions {
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding-left: 36px;
+        gap: 0;
+        padding-left: 40px;
         margin-top: 2px;
       }
-      .task-actions .icon-btn ha-icon {
+      .task-actions ha-icon-button {
+        --mdc-icon-button-size: 36px;
         --mdc-icon-size: 18px;
       }
       .confirm-text {
@@ -797,56 +750,44 @@ class RecurringTodosCard extends HTMLElement {
       .confirm-no {
         color: var(--text-secondary);
       }
-      form {
+      .form {
         display: flex;
         flex-direction: column;
         gap: 12px;
       }
-      form label {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        font-size: 0.85em;
-        color: var(--text-secondary);
+      .form ha-textfield,
+      .form ha-select {
+        width: 100%;
       }
-      form input[type="text"],
-      form input[type="date"],
-      form input[type="number"],
-      form select {
-        padding: 8px;
-        border: 1px solid var(--divider);
-        border-radius: 4px;
-        font-size: 0.95em;
-        background: var(--card-bg);
-        color: var(--text-primary);
-      }
-      fieldset.recurrence {
+      .recurrence {
         border: 1px solid var(--divider);
         border-radius: 4px;
         padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
-      fieldset.recurrence legend {
+      .recurrence-legend {
         font-size: 0.85em;
         color: var(--text-secondary);
-        padding: 0 4px;
       }
-      .interval-label input {
-        width: 60px;
+      .interval-input {
+        max-width: 180px;
       }
       .days-select {
         flex-wrap: wrap;
         gap: 4px;
-        margin-top: 8px;
       }
       .day-chip {
-        flex-direction: row !important;
+        display: inline-flex;
         align-items: center;
-        gap: 2px !important;
+        gap: 2px;
         background: rgba(0,0,0,0.05);
         padding: 4px 8px;
         border-radius: 12px;
         cursor: pointer;
         font-size: 0.85em;
+        color: var(--text-primary);
       }
       .day-chip input {
         display: none;
@@ -858,18 +799,6 @@ class RecurringTodosCard extends HTMLElement {
       .form-actions {
         display: flex;
         justify-content: flex-end;
-      }
-      .btn-submit {
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        padding: 8px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.95em;
-      }
-      .btn-submit:hover {
-        opacity: 0.9;
       }
       .history-view h3 {
         margin: 0 0 8px;
@@ -926,16 +855,27 @@ class RecurringTodosCardEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._config = {};
     this._hass = null;
+    this._renderScheduled = false;
   }
 
   setConfig(config) {
     this._config = { ...config };
-    this._render();
+    this._scheduleRender();
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    this._scheduleRender();
+  }
+
+  _scheduleRender() {
+    if (this._renderScheduled) return;
+    if (!this._hass) return;
+    this._renderScheduled = true;
+    haElementsReady().then(() => {
+      this._renderScheduled = false;
+      this._render();
+    });
   }
 
   _render() {
@@ -949,26 +889,11 @@ class RecurringTodosCardEditor extends HTMLElement {
       .editor {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        padding: 16px 0;
+        gap: 12px;
+        padding: 8px 0;
       }
-      .row {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      label {
-        font-size: 0.85em;
-        color: var(--secondary-text-color, #727272);
-        font-weight: 500;
-      }
-      input {
-        padding: 8px;
-        border: 1px solid var(--divider-color, #e0e0e0);
-        border-radius: 4px;
-        font-size: 0.95em;
-        background: var(--ha-card-background, var(--card-background-color, #fff));
-        color: var(--primary-text-color, #212121);
+      .editor ha-textfield {
+        width: 100%;
       }
     `;
     root.appendChild(style);
@@ -976,41 +901,26 @@ class RecurringTodosCardEditor extends HTMLElement {
     const editor = document.createElement("div");
     editor.className = "editor";
 
-    // Entity picker
-    const entityRow = document.createElement("div");
-    entityRow.className = "row";
-    const entityLabel = document.createElement("label");
-    entityLabel.textContent = "Entity";
-    entityRow.appendChild(entityLabel);
-
     const entityPicker = document.createElement("ha-entity-picker");
     entityPicker.hass = this._hass;
     entityPicker.value = this._config.entity || "";
     entityPicker.includeDomains = ["todo"];
+    entityPicker.label = "Entity";
     entityPicker.addEventListener("value-changed", (ev) => {
       this._config = { ...this._config, entity: ev.detail.value };
       this._dispatch();
     });
-    entityRow.appendChild(entityPicker);
-    editor.appendChild(entityRow);
+    editor.appendChild(entityPicker);
 
-    // Title override
-    const titleRow = document.createElement("div");
-    titleRow.className = "row";
-    const titleLabel = document.createElement("label");
-    titleLabel.textContent = "Title (optional)";
-    titleRow.appendChild(titleLabel);
-
-    const titleInput = document.createElement("input");
-    titleInput.type = "text";
+    const titleInput = document.createElement("ha-textfield");
+    titleInput.setAttribute("label", "Title (optional)");
+    titleInput.setAttribute("placeholder", "Uses entity name if empty");
     titleInput.value = this._config.title || "";
-    titleInput.placeholder = "Uses entity name if empty";
     titleInput.addEventListener("input", (ev) => {
       this._config = { ...this._config, title: ev.target.value };
       this._dispatch();
     });
-    titleRow.appendChild(titleInput);
-    editor.appendChild(titleRow);
+    editor.appendChild(titleInput);
 
     root.appendChild(editor);
   }
@@ -1034,8 +944,10 @@ if (!customElements.get("recurring-todos-card")) {
 }
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "recurring-todos-card",
-  name: "Recurring Todos",
-  description: "Task list with recurring due dates, overdue highlighting, and completion history.",
-});
+if (!window.customCards.some((c) => c.type === "recurring-todos-card")) {
+  window.customCards.push({
+    type: "recurring-todos-card",
+    name: "Recurring Todos",
+    description: "Task list with recurring due dates, overdue highlighting, and completion history.",
+  });
+}

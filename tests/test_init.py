@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -112,33 +112,31 @@ async def test_async_setup_registers_lovelace_resource(hass: HomeAssistant):
     )
 
 
-async def test_async_setup_registers_frontend_module(hass: HomeAssistant):
-    """async_setup must call add_extra_js_url with the cache-bust URL."""
-    from unittest.mock import AsyncMock, MagicMock
-    from custom_components.recurring_todos import async_setup
+async def test_async_setup_does_not_use_add_extra_js_url(hass: HomeAssistant):
+    """Card must not be registered via add_extra_js_url."""
+    col = _make_resource_col()
+    _patch_lovelace(hass, col)
 
     http_mock = MagicMock()
     http_mock.async_register_static_paths = AsyncMock()
     hass.http = http_mock
 
-    await async_setup(hass, {})
-
-    assert CARD_URL_CACHE_BUST in hass.data["frontend_extra_module_url"]
-
-
-async def test_card_js_registered_as_frontend_module(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry,
-):
-    """Card URL is present in frontend modules after full entry setup."""
     hass.data["frontend_extra_module_url"] = set()
 
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
+    from custom_components.recurring_todos import async_setup
+    await async_setup(hass, {})
 
-    extra_urls = hass.data["frontend_extra_module_url"]
-    assert CARD_URL_CACHE_BUST in extra_urls, (
-        f"Card URL {CARD_URL_CACHE_BUST} not in frontend modules: {extra_urls}"
+    assert hass.data["frontend_extra_module_url"] == set()
+
+
+async def test_card_url_uses_manifest_version(hass: HomeAssistant):
+    """Cache-bust query string must track manifest.json version."""
+    manifest_path = Path(__file__).parent.parent / "custom_components" / "recurring_todos" / "manifest.json"
+    manifest_version = json.loads(manifest_path.read_text())["version"]
+
+    assert CARD_URL_CACHE_BUST.endswith(f"?v={manifest_version}"), (
+        f"Cache-bust URL {CARD_URL_CACHE_BUST!r} must end with the manifest "
+        f"version ?v={manifest_version}"
     )
 
 
@@ -245,9 +243,10 @@ async def test_notify_unsub_removed_on_unload(
     assert DOMAIN not in hass.data
 
 
-async def test_card_registered_once_with_multiple_entries(hass: HomeAssistant):
-    """Test that card JS URL is registered only once even with multiple entries."""
-    hass.data["frontend_extra_module_url"] = set()
+async def test_card_resource_registered_once_with_multiple_entries(hass: HomeAssistant):
+    """Lovelace resource is registered exactly once across multiple config entries."""
+    col = _make_resource_col()
+    _patch_lovelace(hass, col)
 
     entry1 = _make_entry("entry_1", "List A")
     entry1.add_to_hass(hass)
@@ -259,9 +258,9 @@ async def test_card_registered_once_with_multiple_entries(hass: HomeAssistant):
     assert await hass.config_entries.async_setup(entry2.entry_id)
     await hass.async_block_till_done()
 
-    extra_urls = hass.data["frontend_extra_module_url"]
-    assert CARD_URL_CACHE_BUST in extra_urls
-    assert len(extra_urls) == 1
+    assert col.async_create_item.await_count == 1, (
+        f"Resource should be registered once, got {col.async_create_item.await_count}"
+    )
 
 
 async def test_unload_entry_with_missing_domain_data(

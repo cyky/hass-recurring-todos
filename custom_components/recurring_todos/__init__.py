@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -69,7 +70,8 @@ SERVICE_SCHEMA_UPDATE = vol.Schema(
     }
 )
 
-CARD_VERSION = "0.5.0"
+_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+CARD_VERSION = json.loads(_MANIFEST_PATH.read_text())["version"]
 CARD_URL = f"/api/{DOMAIN}/recurring-todos-card.js"
 CARD_URL_CACHE_BUST = f"{CARD_URL}?v={CARD_VERSION}"
 CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"
@@ -257,10 +259,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
 
     await _sync_lovelace_resource(hass)
-
-    from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
-
-    add_extra_js_url(hass, CARD_URL_CACHE_BUST)
 
     return True
 
