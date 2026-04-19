@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaCommonFlowHandler,
@@ -27,8 +27,8 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_DEFAULT_RECURRENCE,
-    CONF_NOTIFY_DEVICES,
     CONF_NOTIFICATION_LEAD_TIME_HOURS,
+    CONF_NOTIFY_DEVICES,
     CONF_OVERDUE_REMINDER_INTERVAL_HOURS,
     CONF_QUIET_HOURS_ENABLED,
     CONF_QUIET_HOURS_END,

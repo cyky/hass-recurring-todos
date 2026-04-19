@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from homeassistant.core import HomeAssistant
-
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_mock_service,

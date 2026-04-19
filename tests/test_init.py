@@ -8,22 +8,21 @@ from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.recurring_todos.const import (
-    DOMAIN,
-    SERVICE_COMPLETE_TASK,
-    SERVICE_CREATE_TASK,
-    SERVICE_SNOOZE_TASK,
-    SERVICE_UPDATE_TASK,
-)
 from custom_components.recurring_todos.__init__ import (
     CARD_PATH,
     CARD_URL,
     CARD_URL_CACHE_BUST,
     _remove_lovelace_resource,
     _sync_lovelace_resource,
+)
+from custom_components.recurring_todos.const import (
+    DOMAIN,
+    SERVICE_COMPLETE_TASK,
+    SERVICE_CREATE_TASK,
+    SERVICE_SNOOZE_TASK,
+    SERVICE_UPDATE_TASK,
 )
 
 
@@ -95,6 +94,7 @@ async def test_manifest_has_frontend_hard_dependency():
 async def test_async_setup_registers_lovelace_resource(hass: HomeAssistant):
     """async_setup must register the card as a Lovelace resource."""
     from unittest.mock import AsyncMock, MagicMock
+
     from custom_components.recurring_todos import async_setup
 
     col = _make_resource_col()

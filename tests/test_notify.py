@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from homeassistant.components.todo import TodoItemStatus
 
 from custom_components.recurring_todos.model import TaskItem
@@ -17,7 +16,7 @@ _DT_UTIL_TARGET = "custom_components.recurring_todos.notify.dt_util"
 
 def _mock_now(d: date, hour: int = 0, minute: int = 0) -> datetime:
     """Return a timezone-aware datetime for the given date and optional time."""
-    return datetime(d.year, d.month, d.day, hour, minute, tzinfo=timezone.utc)
+    return datetime(d.year, d.month, d.day, hour, minute, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -118,10 +117,10 @@ def test_should_notify_rate_limit_expired(checker):
 
 
 def test_should_notify_during_quiet_hours_overnight(checker):
-    """Notifications suppressed during overnight quiet hours (22:00–08:00)."""
+    """Notifications suppressed during overnight quiet hours (22:00-08:00)."""
     yesterday = date.today() - timedelta(days=1)
     task = _make_task(due_date=yesterday)
-    # 23:00 is within default quiet hours 22:00–08:00
+    # 23:00 is within default quiet hours 22:00-08:00
     now = _mock_now(date.today(), hour=23)
     assert checker._should_notify(task, now, _default_options()) is False
 
@@ -130,7 +129,7 @@ def test_should_notify_during_quiet_hours_early_morning(checker):
     """Notifications suppressed in early morning during overnight quiet hours."""
     yesterday = date.today() - timedelta(days=1)
     task = _make_task(due_date=yesterday)
-    # 05:00 is within default quiet hours 22:00–08:00
+    # 05:00 is within default quiet hours 22:00-08:00
     now = _mock_now(date.today(), hour=5)
     assert checker._should_notify(task, now, _default_options()) is False
 
@@ -139,7 +138,7 @@ def test_should_notify_after_quiet_hours(checker):
     """Notifications fire after quiet hours end."""
     yesterday = date.today() - timedelta(days=1)
     task = _make_task(due_date=yesterday)
-    # 09:00 is outside default quiet hours 22:00–08:00
+    # 09:00 is outside default quiet hours 22:00-08:00
     now = _mock_now(date.today(), hour=9)
     assert checker._should_notify(task, now, _default_options()) is True
 
@@ -163,15 +162,15 @@ def test_should_notify_exactly_at_quiet_hours_start(checker):
 
 
 def test_should_notify_same_day_quiet_hours(checker):
-    """Same-day quiet hours range (e.g. 01:00–06:00) works correctly."""
+    """Same-day quiet hours range (e.g. 01:00-06:00) works correctly."""
     yesterday = date.today() - timedelta(days=1)
     task = _make_task(due_date=yesterday)
     opts = _default_options(quiet_start="01:00:00", quiet_end="06:00:00")
-    # 03:00 is within 01:00–06:00
+    # 03:00 is within 01:00-06:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=3), opts) is False
-    # 10:00 is outside 01:00–06:00
+    # 10:00 is outside 01:00-06:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=10), opts) is True
-    # 23:00 is outside 01:00–06:00
+    # 23:00 is outside 01:00-06:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=23), opts) is True
 
 
@@ -180,11 +179,11 @@ def test_should_notify_custom_quiet_hours(checker):
     yesterday = date.today() - timedelta(days=1)
     task = _make_task(due_date=yesterday)
     opts = _default_options(quiet_start="20:00:00", quiet_end="10:00:00")
-    # 21:00 is within 20:00–10:00
+    # 21:00 is within 20:00-10:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=21), opts) is False
-    # 07:00 is within 20:00–10:00
+    # 07:00 is within 20:00-10:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=7), opts) is False
-    # 12:00 is outside 20:00–10:00
+    # 12:00 is outside 20:00-10:00
     assert checker._should_notify(task, _mock_now(date.today(), hour=12), opts) is True
 
 

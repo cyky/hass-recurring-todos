@@ -17,7 +17,6 @@ The script performs a full fresh-install flow:
 from __future__ import annotations
 
 import asyncio
-import sys
 import time
 
 import requests
@@ -89,7 +88,9 @@ async def run() -> None:
         await search.fill("Recurring Todos")
         await page.wait_for_timeout(1000)
 
-        result = page.locator("ha-integration-list-item:has-text('Recurring Todos'), mwc-list-item:has-text('Recurring Todos')")
+        result = page.locator(
+            "ha-integration-list-item:has-text('Recurring Todos'), mwc-list-item:has-text('Recurring Todos')"
+        )
         await result.first.click()
         await page.wait_for_load_state("networkidle", timeout=TIMEOUT)
 

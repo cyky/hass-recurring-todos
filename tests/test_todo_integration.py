@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from unittest.mock import patch
 
 from homeassistant.components.todo import (
-    TodoItem,
     TodoItemStatus,
 )
 from homeassistant.core import HomeAssistant
@@ -20,7 +18,7 @@ ENTITY_ID = "todo.test_list"
 
 async def test_entity_created(hass: HomeAssistant, mock_setup_entry):
     """Test that a todo entity is created from the config entry."""
-    entity_id = f"todo.test_list"
+    entity_id = "todo.test_list"
     state = hass.states.get(entity_id)
     assert state is not None
 
@@ -54,7 +52,7 @@ async def test_complete_recurring_task(hass: HomeAssistant, mock_setup_entry):
         DOMAIN,
         "complete_task",
         {
-            "entity_id": f"todo.test_list",
+            "entity_id": "todo.test_list",
             "task_uid": task.uid,
         },
         blocking=True,
@@ -79,7 +77,7 @@ async def test_complete_oneoff_task(hass: HomeAssistant, mock_setup_entry):
         DOMAIN,
         "complete_task",
         {
-            "entity_id": f"todo.test_list",
+            "entity_id": "todo.test_list",
             "task_uid": task.uid,
         },
         blocking=True,
@@ -102,7 +100,7 @@ async def test_snooze_task(hass: HomeAssistant, mock_setup_entry):
         DOMAIN,
         "snooze_task",
         {
-            "entity_id": f"todo.test_list",
+            "entity_id": "todo.test_list",
             "task_uid": task.uid,
             "days": 3,
         },

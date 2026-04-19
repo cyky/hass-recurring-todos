@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.core import HomeAssistant
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.recurring_todos.const import DOMAIN

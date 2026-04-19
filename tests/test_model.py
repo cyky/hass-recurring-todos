@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import patch
 
 from homeassistant.components.todo import TodoItemStatus
@@ -14,7 +14,7 @@ _MOCK_TARGET = "custom_components.recurring_todos.model.dt_util"
 
 def _mock_now(d: date) -> datetime:
     """Return a timezone-aware datetime for the given date."""
-    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    return datetime(d.year, d.month, d.day, tzinfo=UTC)
 
 
 def test_taskitem_defaults():

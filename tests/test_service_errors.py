@@ -5,11 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.recurring_todos.const import DOMAIN
 from custom_components.recurring_todos.model import TaskItem

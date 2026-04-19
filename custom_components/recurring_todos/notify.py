@@ -109,19 +109,16 @@ class NotificationChecker:
             )
             current_time = now.time()
             if quiet_start <= quiet_end:
-                # Same-day range (e.g. 01:00–06:00)
+                # Same-day range (e.g. 01:00-06:00)
                 if quiet_start <= current_time < quiet_end:
                     return False
             else:
-                # Overnight range (e.g. 22:00–08:00)
+                # Overnight range (e.g. 22:00-08:00)
                 if current_time >= quiet_start or current_time < quiet_end:
                     return False
 
         last = self._last_notified.get(task.uid)
-        if last is not None and (now - last) < timedelta(hours=reminder_interval):
-            return False
-
-        return True
+        return not (last is not None and (now - last) < timedelta(hours=reminder_interval))
 
     def _build_message(self, task: TaskItem) -> tuple[str, str]:
         """Build notification title and message for a task."""

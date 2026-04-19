@@ -60,7 +60,7 @@ def test_returns_date_not_datetime():
 
 
 def test_invalid_rrule_raises():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         calculate_next_due("NOT_A_VALID_RRULE", date(2026, 1, 1))
 
 

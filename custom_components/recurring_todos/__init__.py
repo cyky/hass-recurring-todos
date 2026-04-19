@@ -7,7 +7,6 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import voluptuous as vol
-
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.config_entries import ConfigEntry
@@ -29,9 +28,9 @@ from .const import (
     SERVICE_UPDATE_TASK,
     SIGNAL_STORE_UPDATED,
 )
+from .model import TaskItem
 from .notify import NotificationChecker
 from .recurrence import calculate_next_due, validate_rrule
-from .model import TaskItem
 from .store import RecurringTodosStore
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
@@ -80,8 +79,8 @@ CARD_PATH = Path(__file__).parent / "www" / "recurring-todos-card.js"
 async def _get_lovelace_resource_col(hass: HomeAssistant):  # type: ignore[return]
     """Return the Lovelace ResourceStorageCollection, or None if unavailable."""
     try:
-        from homeassistant.components.lovelace import LOVELACE_DATA  # noqa: PLC0415
-        from homeassistant.components.lovelace.resources import (  # noqa: PLC0415
+        from homeassistant.components.lovelace import LOVELACE_DATA
+        from homeassistant.components.lovelace.resources import (
             ResourceStorageCollection,
         )
     except ImportError:
