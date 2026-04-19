@@ -198,6 +198,35 @@ def test_should_notify_quiet_hours_disabled(checker):
     assert checker._should_notify(task, now, opts) is True
 
 
+def test_suppressed_during_quiet_hours_fires_after(checker):
+    """Notification suppressed at midnight fires on first check after quiet hours."""
+    yesterday = date.today() - timedelta(days=1)
+    task = _make_task(due_date=yesterday)
+    opts = _default_options()
+
+    # Suppressed at 00:00 during quiet hours
+    assert checker._should_notify(task, _mock_now(date.today(), hour=0), opts) is False
+    # Still suppressed at 07:30
+    assert checker._should_notify(task, _mock_now(date.today(), hour=7, minute=30), opts) is False
+    # Fires at 08:00 when quiet hours end
+    assert checker._should_notify(task, _mock_now(date.today(), hour=8), opts) is True
+    # No _last_notified was recorded during quiet hours, so nothing blocks it
+
+
+def test_suppressed_during_quiet_hours_no_stale_rate_limit(checker):
+    """Rate limit timer does not tick during quiet hours suppression."""
+    yesterday = date.today() - timedelta(days=1)
+    task = _make_task(due_date=yesterday)
+    opts = _default_options(interval=12)
+
+    # Suppressed at 23:00 — _last_notified is NOT set
+    assert checker._should_notify(task, _mock_now(date.today(), hour=23), opts) is False
+    assert task.uid not in checker._last_notified
+
+    # First notification fires at 08:00
+    assert checker._should_notify(task, _mock_now(date.today(), hour=8), opts) is True
+
+
 # --- _build_message tests ---
 
 
