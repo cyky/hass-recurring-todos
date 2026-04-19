@@ -28,6 +28,7 @@ async def test_notification_sent_to_devices(
             "notify_devices": ["mobile_app_phone"],
             "notification_lead_time_hours": 48,
             "overdue_reminder_interval_hours": 12,
+            "quiet_hours_enabled": False,
         },
     )
     entry.add_to_hass(hass)
@@ -87,6 +88,7 @@ async def test_rate_limiting(hass: HomeAssistant):
             "notify_devices": ["mobile_app_phone"],
             "notification_lead_time_hours": 48,
             "overdue_reminder_interval_hours": 12,
+            "quiet_hours_enabled": False,
         },
     )
     entry.add_to_hass(hass)

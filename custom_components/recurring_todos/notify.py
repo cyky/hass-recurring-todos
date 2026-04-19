@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from homeassistant.components.todo import TodoItemStatus
@@ -18,7 +18,12 @@ from .const import (
     CONF_NOTIFICATION_LEAD_TIME_HOURS,
     CONF_NOTIFY_DEVICES,
     CONF_OVERDUE_REMINDER_INTERVAL_HOURS,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_HOURS_END,
+    CONF_QUIET_HOURS_START,
     DATA_STORE,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
     DOMAIN,
     NOTIFICATION_CHECK_INTERVAL,
 )
@@ -94,6 +99,23 @@ class NotificationChecker:
 
         if now < notify_threshold:
             return False
+
+        if options.get(CONF_QUIET_HOURS_ENABLED, True):
+            quiet_start = time.fromisoformat(
+                options.get(CONF_QUIET_HOURS_START, DEFAULT_QUIET_HOURS_START)
+            )
+            quiet_end = time.fromisoformat(
+                options.get(CONF_QUIET_HOURS_END, DEFAULT_QUIET_HOURS_END)
+            )
+            current_time = now.time()
+            if quiet_start <= quiet_end:
+                # Same-day range (e.g. 01:00–06:00)
+                if quiet_start <= current_time < quiet_end:
+                    return False
+            else:
+                # Overnight range (e.g. 22:00–08:00)
+                if current_time >= quiet_start or current_time < quiet_end:
+                    return False
 
         last = self._last_notified.get(task.uid)
         if last is not None and (now - last) < timedelta(hours=reminder_interval):

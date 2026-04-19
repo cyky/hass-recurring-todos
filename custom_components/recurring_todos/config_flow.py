@@ -14,6 +14,7 @@ from homeassistant.helpers.schema_config_entry_flow import (
     SchemaFlowFormStep,
 )
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -21,6 +22,7 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
+    TimeSelector,
 )
 
 from .const import (
@@ -28,6 +30,11 @@ from .const import (
     CONF_NOTIFY_DEVICES,
     CONF_NOTIFICATION_LEAD_TIME_HOURS,
     CONF_OVERDUE_REMINDER_INTERVAL_HOURS,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_HOURS_END,
+    CONF_QUIET_HOURS_START,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
     DOMAIN,
 )
 
@@ -94,6 +101,30 @@ def _async_get_options_schema(
                     min=1, max=168, step=1, mode=NumberSelectorMode.BOX
                 )
             ),
+            vol.Optional(
+                CONF_QUIET_HOURS_ENABLED,
+                description={
+                    "suggested_value": options.get(
+                        CONF_QUIET_HOURS_ENABLED, True
+                    )
+                },
+            ): BooleanSelector(),
+            vol.Optional(
+                CONF_QUIET_HOURS_START,
+                description={
+                    "suggested_value": options.get(
+                        CONF_QUIET_HOURS_START, DEFAULT_QUIET_HOURS_START
+                    )
+                },
+            ): TimeSelector(),
+            vol.Optional(
+                CONF_QUIET_HOURS_END,
+                description={
+                    "suggested_value": options.get(
+                        CONF_QUIET_HOURS_END, DEFAULT_QUIET_HOURS_END
+                    )
+                },
+            ): TimeSelector(),
             vol.Optional(
                 CONF_OVERDUE_REMINDER_INTERVAL_HOURS,
                 description={
