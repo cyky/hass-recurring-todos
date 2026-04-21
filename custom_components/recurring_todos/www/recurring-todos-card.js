@@ -446,7 +446,7 @@ class RecurringTodosCard extends HTMLElement {
   }
 
   _buildForm(container, task) {
-    const rrule = task ? this._parseRrule(this._getTaskRrule(task.uid)) : { freq: "none", interval: 1, days: [] };
+    const rrule = this._parseRrule(task ? this._getTaskRrule(task.uid) : null);
     const isEdit = !!task;
 
     const form = document.createElement("div");
