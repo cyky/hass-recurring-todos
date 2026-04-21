@@ -13,9 +13,7 @@ const REQUIRED_HA_ELEMENTS = [
   "ha-icon",
   "ha-icon-button",
   "ha-textfield",
-  "ha-select",
   "ha-button",
-  "mwc-list-item",
 ];
 
 let _haElementsReady = null;
@@ -134,7 +132,7 @@ class RecurringTodosCard extends HTMLElement {
     return Math.round((due - today) / (1000 * 60 * 60 * 24));
   }
 
-  _buildRrule(freq, interval, days) {
+  _buildRrule(freq, interval, days, ends) {
     if (freq === "none") return "";
     let rule = "FREQ=" + freq.toUpperCase();
     if (interval && interval > 1) {
@@ -143,25 +141,52 @@ class RecurringTodosCard extends HTMLElement {
     if (freq === "weekly" && days && days.length > 0) {
       rule += ";BYDAY=" + days.join(",");
     }
+    if (ends && ends.type === "until" && ends.until) {
+      rule += ";UNTIL=" + ends.until.replace(/-/g, "");
+    } else if (ends && ends.type === "count" && ends.count > 0) {
+      rule += ";COUNT=" + String(ends.count);
+    }
     return rule;
   }
 
   _parseRrule(rrule) {
-    const result = { freq: "none", interval: 1, days: [] };
+    const result = {
+      freq: "none",
+      interval: 1,
+      days: [],
+      ends: { type: "never", until: "", count: 1 },
+    };
     if (!rrule) return result;
 
     const parts = rrule.split(";");
+    let sawUntil = false;
     for (const part of parts) {
       const [key, val] = part.split("=");
       if (key === "FREQ") result.freq = val.toLowerCase();
       if (key === "INTERVAL") result.interval = parseInt(val, 10);
       if (key === "BYDAY") result.days = val.split(",");
+      if (key === "UNTIL") {
+        const digits = val.slice(0, 8);
+        if (/^\d{8}$/.test(digits)) {
+          result.ends = {
+            type: "until",
+            until: digits.slice(0, 4) + "-" + digits.slice(4, 6) + "-" + digits.slice(6, 8),
+            count: 1,
+          };
+          sawUntil = true;
+        }
+      }
+      if (key === "COUNT" && !sawUntil) {
+        result.ends = { type: "count", until: "", count: parseInt(val, 10) || 1 };
+      }
     }
     return result;
   }
 
-  _freqUnitLabel(freq) {
-    const map = { daily: "days", weekly: "weeks", monthly: "months", yearly: "years" };
+  _freqUnitLabel(freq, plural = true) {
+    const map = plural
+      ? { daily: "days", weekly: "weeks", monthly: "months", yearly: "years" }
+      : { daily: "day", weekly: "week", monthly: "month", yearly: "year" };
     return map[freq] || "";
   }
 
@@ -447,41 +472,64 @@ class RecurringTodosCard extends HTMLElement {
     const fieldset = document.createElement("div");
     fieldset.className = "recurrence";
 
-    const legend = document.createElement("div");
-    legend.className = "recurrence-legend";
-    legend.textContent = "Recurrence";
-    fieldset.appendChild(legend);
+    const repeatsRow = document.createElement("label");
+    repeatsRow.className = "repeats-toggle";
+    const repeatsCb = document.createElement("input");
+    repeatsCb.type = "checkbox";
+    repeatsCb.checked = rrule.freq !== "none";
+    repeatsRow.appendChild(repeatsCb);
+    const repeatsText = document.createElement("span");
+    repeatsText.textContent = "Repeats";
+    repeatsRow.appendChild(repeatsText);
+    fieldset.appendChild(repeatsRow);
 
-    const freqSelect = document.createElement("ha-select");
-    freqSelect.setAttribute("label", "Frequency");
-    freqSelect.fixedMenuPosition = true;
-    freqSelect.naturalMenuWidth = true;
-    const FREQ_OPTIONS = ["none", "daily", "weekly", "monthly", "yearly"];
-    for (const opt of FREQ_OPTIONS) {
-      const item = document.createElement("mwc-list-item");
-      item.setAttribute("value", opt);
-      item.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-      freqSelect.appendChild(item);
-    }
-    freqSelect.value = rrule.freq;
-    fieldset.appendChild(freqSelect);
+    const details = document.createElement("div");
+    details.className = "recurrence-details";
+    details.style.display = repeatsCb.checked ? "flex" : "none";
 
-    const intervalInput = document.createElement("ha-textfield");
+    const everyRow = document.createElement("div");
+    everyRow.className = "every-row";
+    const everyLabel = document.createElement("span");
+    everyLabel.textContent = "Every";
+    everyRow.appendChild(everyLabel);
+
+    const intervalInput = document.createElement("input");
     intervalInput.className = "interval-input";
-    intervalInput.setAttribute("type", "number");
-    intervalInput.setAttribute("min", "1");
-    intervalInput.setAttribute("max", "99");
-    intervalInput.setAttribute(
-      "label",
-      rrule.freq === "none" ? "Interval" : "Every N " + this._freqUnitLabel(rrule.freq)
-    );
+    intervalInput.type = "number";
+    intervalInput.min = "1";
+    intervalInput.max = "99";
     intervalInput.value = String(rrule.interval);
-    fieldset.appendChild(intervalInput);
+    everyRow.appendChild(intervalInput);
+
+    const unitSelect = document.createElement("select");
+    unitSelect.className = "freq-select";
+    const UNIT_OPTIONS = [
+      { freq: "daily", label: "day" },
+      { freq: "weekly", label: "week" },
+      { freq: "monthly", label: "month" },
+      { freq: "yearly", label: "year" },
+    ];
+    const activeFreq = rrule.freq === "none" ? "weekly" : rrule.freq;
+    const updateUnitLabels = () => {
+      const n = parseInt(intervalInput.value, 10) || 1;
+      for (let i = 0; i < UNIT_OPTIONS.length; i++) {
+        unitSelect.options[i].textContent = n > 1 ? UNIT_OPTIONS[i].label + "s" : UNIT_OPTIONS[i].label;
+      }
+    };
+    for (const opt of UNIT_OPTIONS) {
+      const o = document.createElement("option");
+      o.value = opt.freq;
+      o.textContent = opt.label;
+      unitSelect.appendChild(o);
+    }
+    unitSelect.value = activeFreq;
+    updateUnitLabels();
+    everyRow.appendChild(unitSelect);
+    details.appendChild(everyRow);
 
     const daysDiv = document.createElement("div");
     daysDiv.className = "days-select";
-    daysDiv.style.display = rrule.freq === "weekly" ? "flex" : "none";
-
+    daysDiv.style.display = activeFreq === "weekly" ? "flex" : "none";
     const dayCheckboxes = [];
     for (const d of DAYS_OF_WEEK) {
       const chip = document.createElement("label");
@@ -497,19 +545,85 @@ class RecurringTodosCard extends HTMLElement {
       chip.appendChild(span);
       daysDiv.appendChild(chip);
     }
-    fieldset.appendChild(daysDiv);
+    details.appendChild(daysDiv);
+
+    const endsLegend = document.createElement("div");
+    endsLegend.className = "ends-legend";
+    endsLegend.textContent = "Ends";
+    details.appendChild(endsLegend);
+
+    const endsGroup = document.createElement("div");
+    endsGroup.className = "ends-group";
+
+    const endsRadios = {};
+    const makeEndsRow = (type, labelText, extraEl) => {
+      const row = document.createElement("label");
+      row.className = "ends-row";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "ends-" + (isEdit ? task.uid : "new");
+      radio.value = type;
+      endsRadios[type] = radio;
+      row.appendChild(radio);
+      const text = document.createElement("span");
+      text.textContent = labelText;
+      row.appendChild(text);
+      if (extraEl) row.appendChild(extraEl);
+      endsGroup.appendChild(row);
+    };
+
+    const untilInput = document.createElement("input");
+    untilInput.type = "date";
+    untilInput.className = "ends-until";
+    untilInput.value = rrule.ends.until || "";
+
+    const countInput = document.createElement("input");
+    countInput.type = "number";
+    countInput.min = "1";
+    countInput.max = "999";
+    countInput.className = "ends-count";
+    countInput.value = String(rrule.ends.count || 1);
+    const countSuffix = document.createElement("span");
+    countSuffix.className = "ends-count-suffix";
+    countSuffix.textContent = "occurrences";
+    const countWrap = document.createElement("span");
+    countWrap.className = "ends-count-wrap";
+    countWrap.appendChild(countInput);
+    countWrap.appendChild(countSuffix);
+
+    makeEndsRow("never", "Never");
+    makeEndsRow("until", "On", untilInput);
+    makeEndsRow("count", "After", countWrap);
+
+    endsRadios[rrule.ends.type].checked = true;
+    const syncEndsEnabled = () => {
+      untilInput.disabled = !endsRadios.until.checked;
+      countInput.disabled = !endsRadios.count.checked;
+    };
+    syncEndsEnabled();
+    for (const r of Object.values(endsRadios)) {
+      r.addEventListener("change", syncEndsEnabled);
+    }
+    untilInput.addEventListener("focus", () => {
+      endsRadios.until.checked = true;
+      syncEndsEnabled();
+    });
+    countInput.addEventListener("focus", () => {
+      endsRadios.count.checked = true;
+      syncEndsEnabled();
+    });
+
+    details.appendChild(endsGroup);
+    fieldset.appendChild(details);
     form.appendChild(fieldset);
 
-    freqSelect.addEventListener("selected", (e) => {
-      const idx = e.detail?.index;
-      const freq = typeof idx === "number" && idx >= 0 ? FREQ_OPTIONS[idx] : freqSelect.value;
-      if (!freq) return;
-      daysDiv.style.display = freq === "weekly" ? "flex" : "none";
-      intervalInput.setAttribute(
-        "label",
-        freq === "none" ? "Interval" : "Every N " + this._freqUnitLabel(freq)
-      );
+    repeatsCb.addEventListener("change", () => {
+      details.style.display = repeatsCb.checked ? "flex" : "none";
     });
+    unitSelect.addEventListener("change", () => {
+      daysDiv.style.display = unitSelect.value === "weekly" ? "flex" : "none";
+    });
+    intervalInput.addEventListener("input", updateUnitLabels);
 
     const formActions = document.createElement("div");
     formActions.className = "form-actions";
@@ -527,11 +641,30 @@ class RecurringTodosCard extends HTMLElement {
       }
       const days = dayCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
       const interval = parseInt(intervalInput.value, 10) || 1;
+      let freq = "none";
+      let ends = { type: "never" };
+      if (repeatsCb.checked) {
+        freq = unitSelect.value;
+        if (endsRadios.until.checked) {
+          if (!untilInput.value) {
+            untilInput.focus();
+            return;
+          }
+          ends = { type: "until", until: untilInput.value };
+        } else if (endsRadios.count.checked) {
+          const n = parseInt(countInput.value, 10);
+          if (!n || n < 1) {
+            countInput.focus();
+            return;
+          }
+          ends = { type: "count", count: n };
+        }
+      }
       const data = {
         name: nameInput.value.trim(),
         description: descInput.value || "",
         due_date: dueInput.value || "",
-        rrule: this._buildRrule(freqSelect.value, interval, days),
+        rrule: this._buildRrule(freq, interval, days, ends),
       };
 
       if (isEdit) {
@@ -545,7 +678,7 @@ class RecurringTodosCard extends HTMLElement {
     };
 
     submitBtn.addEventListener("click", submit);
-    for (const el of [nameInput, descInput, dueInput, intervalInput]) {
+    for (const el of [nameInput, descInput, dueInput, intervalInput, untilInput, countInput]) {
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -767,8 +900,7 @@ class RecurringTodosCard extends HTMLElement {
         flex-direction: column;
         gap: 12px;
       }
-      .form ha-textfield,
-      .form ha-select {
+      .form ha-textfield {
         width: 100%;
       }
       .recurrence {
@@ -779,12 +911,84 @@ class RecurringTodosCard extends HTMLElement {
         flex-direction: column;
         gap: 12px;
       }
-      .recurrence-legend {
+      .repeats-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95em;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .recurrence-details {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .every-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+        font-size: 0.95em;
+      }
+      .interval-input {
+        width: 64px;
+        padding: 8px 10px;
+        font-size: 1em;
+        color: var(--text-primary);
+        background: var(--card-background, #fff);
+        border: 1px solid var(--divider);
+        border-radius: 4px;
+      }
+      .freq-select {
+        padding: 8px 10px;
+        font-size: 1em;
+        color: var(--text-primary);
+        background: var(--card-background, #fff);
+        border: 1px solid var(--divider);
+        border-radius: 4px;
+      }
+      .ends-legend {
         font-size: 0.85em;
         color: var(--text-secondary);
       }
-      .interval-input {
-        max-width: 180px;
+      .ends-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .ends-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+        font-size: 0.9em;
+        cursor: pointer;
+      }
+      .ends-until,
+      .ends-count {
+        padding: 6px 8px;
+        font-size: 0.95em;
+        color: var(--text-primary);
+        background: var(--card-background, #fff);
+        border: 1px solid var(--divider);
+        border-radius: 4px;
+      }
+      .ends-count {
+        width: 64px;
+      }
+      .ends-count-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .ends-count-suffix {
+        font-size: 0.9em;
+        color: var(--text-secondary);
+      }
+      .ends-until:disabled,
+      .ends-count:disabled {
+        opacity: 0.5;
       }
       .days-select {
         flex-wrap: wrap;
