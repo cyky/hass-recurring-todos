@@ -777,6 +777,7 @@ class RecurringTodosCard extends HTMLElement {
         --error: var(--error-color, #db4437);
         --warning: var(--warning-color, #ffa600);
         --divider: var(--divider-color, #e0e0e0);
+        --card-background: var(--input-fill-color, var(--card-background-color, #f5f5f5));
       }
       .card-header {
         display: flex;
@@ -937,17 +938,19 @@ class RecurringTodosCard extends HTMLElement {
         padding: 8px 10px;
         font-size: 1em;
         color: var(--text-primary);
-        background: var(--card-background, #fff);
+        background: var(--card-background);
         border: 1px solid var(--divider);
         border-radius: 4px;
+        color-scheme: light dark;
       }
       .freq-select {
         padding: 8px 10px;
         font-size: 1em;
         color: var(--text-primary);
-        background: var(--card-background, #fff);
+        background: var(--card-background);
         border: 1px solid var(--divider);
         border-radius: 4px;
+        color-scheme: light dark;
       }
       .ends-legend {
         font-size: 0.85em;
@@ -971,9 +974,10 @@ class RecurringTodosCard extends HTMLElement {
         padding: 6px 8px;
         font-size: 0.95em;
         color: var(--text-primary);
-        background: var(--card-background, #fff);
+        background: var(--card-background);
         border: 1px solid var(--divider);
         border-radius: 4px;
+        color-scheme: light dark;
       }
       .ends-count {
         width: 64px;
@@ -999,7 +1003,7 @@ class RecurringTodosCard extends HTMLElement {
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        background: rgba(0,0,0,0.05);
+        background: var(--secondary-background-color, rgba(128,128,128,0.15));
         padding: 4px 8px;
         border-radius: 12px;
         cursor: pointer;
