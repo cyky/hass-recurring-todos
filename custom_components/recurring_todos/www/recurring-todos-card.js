@@ -14,6 +14,7 @@ const REQUIRED_HA_ELEMENTS = [
   "ha-icon-button",
   "ha-textfield",
   "ha-button",
+  "ha-form",
 ];
 
 let _haElementsReady = null;
@@ -1108,35 +1109,29 @@ class RecurringTodosCardEditor extends HTMLElement {
         gap: 12px;
         padding: 8px 0;
       }
-      .editor ha-textfield {
-        width: 100%;
-      }
     `;
     root.appendChild(style);
 
     const editor = document.createElement("div");
     editor.className = "editor";
 
-    const entityPicker = document.createElement("ha-entity-picker");
-    entityPicker.hass = this._hass;
-    entityPicker.value = this._config.entity || "";
-    entityPicker.includeDomains = ["todo"];
-    entityPicker.label = "Entity";
-    entityPicker.addEventListener("value-changed", (ev) => {
-      this._config = { ...this._config, entity: ev.detail.value };
-      this._dispatch();
-    });
-    editor.appendChild(entityPicker);
+    const schema = [
+      { name: "entity", required: true, selector: { entity: { domain: "todo" } } },
+      { name: "title", selector: { text: {} } },
+    ];
+    const labels = { entity: "Entity", title: "Title (optional)" };
 
-    const titleInput = document.createElement("ha-textfield");
-    titleInput.setAttribute("label", "Title (optional)");
-    titleInput.setAttribute("placeholder", "Uses entity name if empty");
-    titleInput.value = this._config.title || "";
-    titleInput.addEventListener("input", (ev) => {
-      this._config = { ...this._config, title: ev.target.value };
+    const form = document.createElement("ha-form");
+    form.hass = this._hass;
+    form.schema = schema;
+    form.data = { entity: this._config.entity || "", title: this._config.title || "" };
+    form.computeLabel = (s) => labels[s.name] || s.name;
+    form.addEventListener("value-changed", (ev) => {
+      const v = ev.detail.value || {};
+      this._config = { ...this._config, entity: v.entity || "", title: v.title || "" };
       this._dispatch();
     });
-    editor.appendChild(titleInput);
+    editor.appendChild(form);
 
     root.appendChild(editor);
   }
