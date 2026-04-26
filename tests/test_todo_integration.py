@@ -108,6 +108,117 @@ async def test_complete_oneoff_task_toggles_back(hass: HomeAssistant, mock_setup
     assert toggled.status == TodoItemStatus.NEEDS_ACTION
 
 
+async def test_complete_recurring_records_due_date_before(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Completing a recurring task stores the prior due date in history."""
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    task = TaskItem(name="Weekly", due_date=today, rrule="FREQ=WEEKLY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "complete_task",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    completed = next(t for t in items if t.uid == task.uid)
+    assert completed.completion_history[-1]["due_date_before"] == today.isoformat()
+
+
+async def test_undo_last_completion_recurring(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undo restores the prior due date and removes the history entry."""
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    task = TaskItem(name="Weekly", due_date=today, rrule="FREQ=WEEKLY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "complete_task",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    restored = next(t for t in items if t.uid == task.uid)
+    assert restored.due_date == today
+    assert restored.completion_history == []
+    assert restored.status == TodoItemStatus.NEEDS_ACTION
+
+
+async def test_undo_chains_through_history(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undoing twice walks back through two completions."""
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    task = TaskItem(name="Daily", due_date=today, rrule="FREQ=DAILY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    for _ in range(2):
+        await hass.services.async_call(
+            DOMAIN,
+            "complete_task",
+            {"entity_id": ENTITY_ID, "task_uid": task.uid},
+            blocking=True,
+        )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    after_two = next(t for t in items if t.uid == task.uid)
+    assert len(after_two.completion_history) == 2
+    assert after_two.due_date == today + timedelta(days=2)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    restored = next(t for t in items if t.uid == task.uid)
+    assert restored.due_date == today
+    assert restored.completion_history == []
+
+
+async def test_undo_with_empty_history_raises(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undo on a task with no completions raises a validation error."""
+    from homeassistant.exceptions import ServiceValidationError
+    import pytest
+
+    store = hass.data[DOMAIN]["store"]
+    task = TaskItem(name="Fresh", due_date=date.today(), rrule="FREQ=WEEKLY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "undo_last_completion",
+            {"entity_id": ENTITY_ID, "task_uid": task.uid},
+            blocking=True,
+        )
+
+
 async def test_snooze_task(hass: HomeAssistant, mock_setup_entry):
     """Test that snoozing a task pushes the due date forward."""
     store = hass.data[DOMAIN]["store"]

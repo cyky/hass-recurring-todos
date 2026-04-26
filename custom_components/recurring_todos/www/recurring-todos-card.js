@@ -38,6 +38,7 @@ class RecurringTodosCard extends HTMLElement {
     this._historyTask = null;
     this._renderScheduled = false;
     this._lastStateSig = null;
+    this._pending = new Set();
   }
 
   _stateSignature() {
@@ -206,10 +207,33 @@ class RecurringTodosCard extends HTMLElement {
   }
 
   async _completeTask(uid) {
-    await this._hass.callService("recurring_todos", "complete_task", {
-      entity_id: this._config.entity,
-      task_uid: uid,
-    });
+    if (this._pending.has(uid)) return;
+    this._pending.add(uid);
+    this._render();
+    try {
+      await this._hass.callService("recurring_todos", "complete_task", {
+        entity_id: this._config.entity,
+        task_uid: uid,
+      });
+    } finally {
+      this._pending.delete(uid);
+      this._render();
+    }
+  }
+
+  async _undoLastCompletion(uid) {
+    if (this._pending.has(uid)) return;
+    this._pending.add(uid);
+    this._render();
+    try {
+      await this._hass.callService("recurring_todos", "undo_last_completion", {
+        entity_id: this._config.entity,
+        task_uid: uid,
+      });
+    } finally {
+      this._pending.delete(uid);
+      this._render();
+    }
   }
 
   async _snoozeTask(uid, days = 1) {
@@ -353,10 +377,16 @@ class RecurringTodosCard extends HTMLElement {
       const main = document.createElement("div");
       main.className = "task-main";
 
-      main.appendChild(this._iconButton(
+      const pending = this._pending.has(task.uid);
+      const completeBtn = this._iconButton(
         completed ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline",
         { className: "btn-complete", title: "Complete", onClick: () => this._completeTask(task.uid) }
-      ));
+      );
+      if (pending) {
+        completeBtn.setAttribute("disabled", "");
+        completeBtn.classList.add("pending");
+      }
+      main.appendChild(completeBtn);
 
       const info = document.createElement("div");
       info.className = "task-info";
@@ -692,7 +722,10 @@ class RecurringTodosCard extends HTMLElement {
   }
 
   _buildHistory(container) {
-    const task = this._historyTask;
+    const stored = this._historyTask;
+    const task = stored
+      ? this._getTasks().find((t) => t.uid === stored.uid) || stored
+      : null;
     if (!task) {
       const msg = document.createElement("div");
       msg.textContent = "No task selected";
@@ -743,18 +776,33 @@ class RecurringTodosCard extends HTMLElement {
       const list = document.createElement("ul");
       list.className = "history-list";
       const recent = [...history].reverse().slice(0, 50);
-      for (const entry of recent) {
+      const pending = this._pending.has(task.uid);
+      recent.forEach((entry, idx) => {
         const li = document.createElement("li");
+        const label = document.createElement("span");
         const date = new Date(entry.completed_at);
-        li.textContent = date.toLocaleDateString(undefined, {
+        label.textContent = date.toLocaleDateString(undefined, {
           year: "numeric",
           month: "short",
           day: "numeric",
           hour: "2-digit",
           minute: "2-digit",
         });
+        li.appendChild(label);
+        if (idx === 0) {
+          const undoBtn = this._iconButton("mdi:undo", {
+            className: "btn-undo",
+            title: "Undo this completion",
+            onClick: () => this._undoLastCompletion(task.uid),
+          });
+          if (pending) {
+            undoBtn.setAttribute("disabled", "");
+            undoBtn.classList.add("pending");
+          }
+          li.appendChild(undoBtn);
+        }
         list.appendChild(li);
-      }
+      });
       view.appendChild(list);
 
       if (history.length > 50) {
@@ -1053,6 +1101,19 @@ class RecurringTodosCard extends HTMLElement {
         border-bottom: 1px solid var(--divider);
         font-size: 0.85em;
         color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .btn-undo {
+        --mdc-icon-button-size: 32px;
+        --mdc-icon-size: 18px;
+        color: var(--text-secondary);
+      }
+      ha-icon-button.pending {
+        opacity: 0.4;
+        pointer-events: none;
       }
       .history-list li:last-child {
         border-bottom: none;

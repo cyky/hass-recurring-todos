@@ -186,7 +186,12 @@ class RecurringTodosListEntity(TodoListEntity):
         )
         if completing and existing.rrule:
             existing.completion_history.append(
-                {"completed_at": dt_util.now().isoformat()}
+                {
+                    "completed_at": dt_util.now().isoformat(),
+                    "due_date_before": (
+                        existing.due_date.isoformat() if existing.due_date else None
+                    ),
+                }
             )
             next_due = calculate_next_due(
                 existing.rrule, existing.due_date or dt_util.now().date()

@@ -25,15 +25,26 @@ from .const import (
     SERVICE_COMPLETE_TASK,
     SERVICE_CREATE_TASK,
     SERVICE_SNOOZE_TASK,
+    SERVICE_UNDO_LAST_COMPLETION,
     SERVICE_UPDATE_TASK,
     SIGNAL_STORE_UPDATED,
 )
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 from .model import TaskItem
 from .notify import NotificationChecker
 from .recurrence import calculate_next_due, validate_rrule
 from .store import RecurringTodosStore
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
+    {
+        vol.Required("entity_id"): str,
+        vol.Required("task_uid"): str,
+    }
+)
+
+SERVICE_SCHEMA_UNDO = vol.Schema(
     {
         vol.Required("entity_id"): str,
         vol.Required("task_uid"): str,
@@ -167,7 +178,10 @@ async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) ->
 
     if task.rrule:
         task.completion_history.append(
-            {"completed_at": dt_util.now().isoformat()}
+            {
+                "completed_at": dt_util.now().isoformat(),
+                "due_date_before": task.due_date.isoformat() if task.due_date else None,
+            }
         )
         task.due_date = calculate_next_due(
             task.rrule, task.due_date or dt_util.now().date()
@@ -177,6 +191,45 @@ async def _async_handle_complete_task(hass: HomeAssistant, call: ServiceCall) ->
         task.status = TodoItemStatus.NEEDS_ACTION
     else:
         task.status = TodoItemStatus.COMPLETED
+
+    await store.async_update_item(entry_id, task)
+    _async_refresh_entity(hass, call.data["entity_id"])
+
+
+async def _async_handle_undo_last_completion(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the undo_last_completion service call."""
+    store, entry_id = _resolve_store(hass, call.data["entity_id"])
+    task_uid = call.data["task_uid"]
+
+    items = store.get_items(entry_id)
+    task = next((t for t in items if t.uid == task_uid), None)
+    if task is None:
+        raise ValueError(f"Task {task_uid} not found")
+
+    if not task.completion_history:
+        raise ValueError(f"Task {task_uid} has no completions to undo")
+
+    last = task.completion_history.pop()
+
+    if task.rrule:
+        if "due_date_before" in last:
+            prev = last["due_date_before"]
+            try:
+                task.due_date = date.fromisoformat(prev) if prev else None
+            except ValueError:
+                _LOGGER.warning(
+                    "Invalid due_date_before %r on task %s; leaving due_date unchanged",
+                    prev,
+                    task_uid,
+                )
+        else:
+            _LOGGER.warning(
+                "History entry for task %s lacks due_date_before; leaving due_date unchanged",
+                task_uid,
+            )
+    task.status = TodoItemStatus.NEEDS_ACTION
 
     await store.async_update_item(entry_id, task)
     _async_refresh_entity(hass, call.data["entity_id"])
@@ -290,6 +343,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_complete(call: ServiceCall) -> None:
             await _wrap_service(_async_handle_complete_task, call)
 
+        async def handle_undo(call: ServiceCall) -> None:
+            await _wrap_service(_async_handle_undo_last_completion, call)
+
         async def handle_snooze(call: ServiceCall) -> None:
             await _wrap_service(_async_handle_snooze_task, call)
 
@@ -304,6 +360,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             SERVICE_COMPLETE_TASK,
             handle_complete,
             schema=SERVICE_SCHEMA_COMPLETE,
+        )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_UNDO_LAST_COMPLETION,
+            handle_undo,
+            schema=SERVICE_SCHEMA_UNDO,
         )
         hass.services.async_register(
             DOMAIN,
@@ -347,6 +409,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         domain_data[DATA_ENTRY_IDS].discard(entry.entry_id)
         if not domain_data[DATA_ENTRY_IDS]:
             hass.services.async_remove(DOMAIN, SERVICE_COMPLETE_TASK)
+            hass.services.async_remove(DOMAIN, SERVICE_UNDO_LAST_COMPLETION)
             hass.services.async_remove(DOMAIN, SERVICE_SNOOZE_TASK)
             hass.services.async_remove(DOMAIN, SERVICE_CREATE_TASK)
             hass.services.async_remove(DOMAIN, SERVICE_UPDATE_TASK)

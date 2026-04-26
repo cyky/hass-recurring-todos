@@ -17,6 +17,25 @@ complete_task:
       selector:
         text:
 
+undo_last_completion:
+  name: Undo last completion
+  description: Remove the most recent completion entry, restoring the prior due date for recurring tasks.
+  fields:
+    entity_id:
+      name: Entity
+      description: The todo list entity containing the task.
+      required: true
+      selector:
+        entity:
+          integration: recurring_todos
+          domain: todo
+    task_uid:
+      name: Task UID
+      description: The unique identifier of the task whose last completion to undo.
+      required: true
+      selector:
+        text:
+
 snooze_task:
   name: Snooze task
   description: Push a task's due date forward by a number of days.
