@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_ENTRY_IDS,
+    DATA_NOTIFY_CHECKERS,
     DATA_NOTIFY_UNSUBS,
     DATA_STORE,
     DOMAIN,
@@ -34,7 +35,7 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 from .model import TaskItem
 from .notify import NotificationChecker
-from .recurrence import calculate_next_due, validate_rrule
+from .recurrence import calculate_next_due, calculate_previous_due, validate_rrule
 from .store import RecurringTodosStore
 
 SERVICE_SCHEMA_COMPLETE = vol.Schema(
@@ -214,24 +215,28 @@ async def _async_handle_undo_last_completion(
     last = task.completion_history.pop()
 
     if task.rrule:
+        restored: date | None = None
+        used_recorded = False
         if "due_date_before" in last:
             prev = last["due_date_before"]
             try:
-                task.due_date = date.fromisoformat(prev) if prev else None
+                restored = date.fromisoformat(prev) if prev else None
+                used_recorded = True
             except ValueError:
                 _LOGGER.warning(
-                    "Invalid due_date_before %r on task %s; leaving due_date unchanged",
+                    "Invalid due_date_before %r on task %s; falling back to rrule",
                     prev,
                     task_uid,
                 )
-        else:
-            _LOGGER.warning(
-                "History entry for task %s lacks due_date_before; leaving due_date unchanged",
-                task_uid,
-            )
+        if not used_recorded and task.due_date is not None:
+            restored = calculate_previous_due(task.rrule, task.due_date)
+        if restored is not None or used_recorded:
+            task.due_date = restored
     task.status = TodoItemStatus.NEEDS_ACTION
 
     await store.async_update_item(entry_id, task)
+    for checker in hass.data[DOMAIN].get(DATA_NOTIFY_CHECKERS, {}).values():
+        checker.reset_task(task_uid)
     _async_refresh_entity(hass, call.data["entity_id"])
 
 
@@ -323,6 +328,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DATA_STORE: None,
         DATA_ENTRY_IDS: set(),
         DATA_NOTIFY_UNSUBS: {},
+        DATA_NOTIFY_CHECKERS: {},
     })
 
     if domain_data[DATA_STORE] is None:
@@ -389,6 +395,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     checker = NotificationChecker(hass, entry)
     unsub = await checker.start()
     domain_data[DATA_NOTIFY_UNSUBS][entry.entry_id] = unsub
+    domain_data[DATA_NOTIFY_CHECKERS][entry.entry_id] = checker
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -397,15 +404,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     domain_data = hass.data.get(DOMAIN)
-    if domain_data is None:
-        return True
-
-    unsub = domain_data[DATA_NOTIFY_UNSUBS].pop(entry.entry_id, None)
-    if unsub is not None:
-        unsub()
+    if domain_data is not None:
+        unsub = domain_data[DATA_NOTIFY_UNSUBS].pop(entry.entry_id, None)
+        if unsub is not None:
+            unsub()
+        domain_data[DATA_NOTIFY_CHECKERS].pop(entry.entry_id, None)
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
+    if unload_ok and domain_data is not None:
         domain_data[DATA_ENTRY_IDS].discard(entry.entry_id)
         if not domain_data[DATA_ENTRY_IDS]:
             hass.services.async_remove(DOMAIN, SERVICE_COMPLETE_TASK)

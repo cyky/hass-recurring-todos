@@ -226,7 +226,8 @@ async def test_notify_unsub_called_on_unload(
     """Test that the notification checker unsubscribe is actually called on unload."""
     from unittest.mock import MagicMock
 
-    mock_unsub = MagicMock()
+    real_unsub = hass.data[DOMAIN]["notify_unsubs"][mock_setup_entry.entry_id]
+    mock_unsub = MagicMock(side_effect=real_unsub)
     hass.data[DOMAIN]["notify_unsubs"][mock_setup_entry.entry_id] = mock_unsub
     await hass.config_entries.async_unload(mock_setup_entry.entry_id)
     mock_unsub.assert_called_once()
@@ -270,6 +271,10 @@ async def test_unload_entry_with_missing_domain_data(
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
+
+    # Cancel the notification timer before nuking domain data so it doesn't leak
+    for unsub in hass.data[DOMAIN]["notify_unsubs"].values():
+        unsub()
 
     # Simulate domain data already cleaned up (e.g. double unload)
     hass.data.pop(DOMAIN, None)

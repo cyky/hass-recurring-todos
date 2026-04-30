@@ -199,6 +199,105 @@ async def test_undo_chains_through_history(
     assert restored.completion_history == []
 
 
+async def test_undo_resets_notification_tracking(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undo clears NotificationChecker._last_notified so the task can notify again."""
+    from custom_components.recurring_todos.const import DATA_NOTIFY_CHECKERS
+
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    task = TaskItem(name="Weekly", due_date=today, rrule="FREQ=WEEKLY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    checkers = hass.data[DOMAIN][DATA_NOTIFY_CHECKERS]
+    checker = checkers[mock_setup_entry.entry_id]
+    checker._last_notified[task.uid] = dt_util.now()
+
+    await hass.services.async_call(
+        DOMAIN,
+        "complete_task",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+
+    assert task.uid not in checker._last_notified
+
+
+async def test_undo_refreshes_entity_due_date(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undo updates the entity's exposed due date back to the original."""
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    task = TaskItem(name="Weekly", due_date=today, rrule="FREQ=WEEKLY")
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "complete_task",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    advanced_due = state.attributes["todo_items"][0]["due"]
+    assert advanced_due > today.isoformat()
+
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    item = state.attributes["todo_items"][0]
+    assert item["due"] == today.isoformat()
+    assert item["status"] == "needs_action"
+
+
+async def test_undo_legacy_completion_without_due_date_before(
+    hass: HomeAssistant, mock_setup_entry
+):
+    """Undo restores the due date for legacy completions lacking due_date_before.
+
+    Pre-9bb541f completion entries don't carry due_date_before. Undo should
+    fall back to walking the rrule one step backwards from the current due.
+    """
+    store = hass.data[DOMAIN]["store"]
+    today = date.today()
+    next_week = today + timedelta(days=7)
+    task = TaskItem(
+        name="Weekly legacy",
+        due_date=next_week,
+        rrule="FREQ=WEEKLY",
+        completion_history=[{"completed_at": "2026-04-25T20:00:00+00:00"}],
+    )
+    await store.async_add_item(mock_setup_entry.entry_id, task)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "undo_last_completion",
+        {"entity_id": ENTITY_ID, "task_uid": task.uid},
+        blocking=True,
+    )
+
+    items = store.get_items(mock_setup_entry.entry_id)
+    restored = next(t for t in items if t.uid == task.uid)
+    assert restored.due_date == today
+    assert restored.completion_history == []
+    assert restored.status == TodoItemStatus.NEEDS_ACTION
+
+
 async def test_undo_with_empty_history_raises(
     hass: HomeAssistant, mock_setup_entry
 ):

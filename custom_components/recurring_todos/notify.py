@@ -40,6 +40,10 @@ class NotificationChecker:
         self._entry = entry
         self._last_notified: dict[str, datetime] = {}
 
+    def reset_task(self, task_uid: str) -> None:
+        """Clear notification tracking for a task so it may notify again."""
+        self._last_notified.pop(task_uid, None)
+
     async def start(self) -> Callable[[], None]:
         """Start the periodic notification checker and return the unsub callable."""
         unsub = async_track_time_interval(
