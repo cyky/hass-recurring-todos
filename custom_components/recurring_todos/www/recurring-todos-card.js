@@ -8,24 +8,6 @@ const DAYS_OF_WEEK = [
   { value: "SU", label: "Sun" },
 ];
 
-const REQUIRED_HA_ELEMENTS = [
-  "ha-card",
-  "ha-icon",
-  "ha-icon-button",
-  "ha-textfield",
-  "ha-button",
-];
-
-let _haElementsReady = null;
-function haElementsReady() {
-  if (_haElementsReady === null) {
-    _haElementsReady = Promise.all(
-      REQUIRED_HA_ELEMENTS.map((name) => customElements.whenDefined(name))
-    );
-  }
-  return _haElementsReady;
-}
-
 class RecurringTodosCard extends HTMLElement {
   constructor() {
     super();
@@ -81,7 +63,7 @@ class RecurringTodosCard extends HTMLElement {
     if (this._renderScheduled) return;
     if (!this._hass || !this._config.entity) return;
     this._renderScheduled = true;
-    haElementsReady().then(() => {
+    queueMicrotask(() => {
       this._renderScheduled = false;
       this._render();
     });
@@ -1153,7 +1135,7 @@ class RecurringTodosCardEditor extends HTMLElement {
     if (this._renderScheduled) return;
     if (!this._hass) return;
     this._renderScheduled = true;
-    haElementsReady().then(() => {
+    queueMicrotask(() => {
       this._renderScheduled = false;
       this._render();
     });

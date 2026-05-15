@@ -1,9 +1,10 @@
 /**
- * Regression test: REQUIRED_HA_ELEMENTS must only list elements used in the
- * main card render path. The card blocks rendering on
- * customElements.whenDefined() for each entry, so editor-only elements
- * (e.g. ha-form) would stall the dashboard card forever — HA does not
- * register editor-only elements until the config UI is opened.
+ * Regression test: card render must not be gated on customElements.whenDefined()
+ * for HA elements. Doing so stalls the dashboard whenever an awaited element
+ * (e.g. ha-textfield, ha-form) isn't pre-registered — HA loads form-only
+ * elements lazily, so the gate's promise never resolves and the card never
+ * paints. Web components upgrade in place anyway: createElement returns an
+ * unknown element that becomes the right one once HA registers it.
  *
  * Run: node --test tests/test_card_required_elements.js
  */
@@ -18,48 +19,18 @@ const SRC = fs.readFileSync(
   "utf8",
 );
 
-function extractRequired(src) {
-  const m = src.match(/REQUIRED_HA_ELEMENTS\s*=\s*\[([\s\S]*?)\]/);
-  assert.ok(m, "REQUIRED_HA_ELEMENTS array not found");
-  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-}
-
-function sliceClass(src, name) {
-  const start = src.indexOf(`class ${name}`);
-  assert.ok(start >= 0, `class ${name} not found`);
-  let depth = 0;
-  let i = src.indexOf("{", start);
-  const begin = i;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") {
-      depth--;
-      if (depth === 0) return src.slice(begin, i + 1);
-    }
-  }
-  throw new Error(`unterminated class ${name}`);
-}
-
-describe("REQUIRED_HA_ELEMENTS gate", () => {
-  const required = extractRequired(SRC);
-  const cardBody = sliceClass(SRC, "RecurringTodosCard");
-  const editorBody = sliceClass(SRC, "RecurringTodosCardEditor");
-
-  it("is non-empty", () => {
-    assert.ok(required.length > 0);
+describe("card render gate", () => {
+  it("does not call customElements.whenDefined() anywhere", () => {
+    assert.ok(
+      !SRC.includes("whenDefined("),
+      "customElements.whenDefined() is back — it will stall card render if HA hasn't pre-registered the awaited element. Render unconditionally and rely on web component upgrade instead.",
+    );
   });
 
-  for (const tag of required) {
-    it(`'${tag}' is used by the main card (not only the editor)`, () => {
-      const usedInCard = cardBody.includes(`"${tag}"`);
-      const usedInEditor = editorBody.includes(`"${tag}"`);
-      assert.ok(
-        usedInCard,
-        `'${tag}' is in REQUIRED_HA_ELEMENTS but never used in RecurringTodosCard` +
-          (usedInEditor
-            ? ` (only used in editor — would stall dashboard render because HA does not pre-register editor-only elements)`
-            : ""),
-      );
-    });
-  }
+  it("does not declare a REQUIRED_HA_ELEMENTS list", () => {
+    assert.ok(
+      !SRC.includes("REQUIRED_HA_ELEMENTS"),
+      "REQUIRED_HA_ELEMENTS reintroduced — same stall risk as the whenDefined() gate.",
+    );
+  });
 });
