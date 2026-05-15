@@ -14,7 +14,6 @@ const REQUIRED_HA_ELEMENTS = [
   "ha-icon-button",
   "ha-textfield",
   "ha-button",
-  "ha-form",
 ];
 
 let _haElementsReady = null;
