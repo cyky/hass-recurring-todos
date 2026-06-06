@@ -464,22 +464,30 @@ class RecurringTodosCard extends HTMLElement {
     const form = document.createElement("div");
     form.className = "form";
 
-    const nameInput = document.createElement("ha-textfield");
-    nameInput.setAttribute("label", "Name");
-    nameInput.setAttribute("required", "");
+    const makeField = (labelText, type) => {
+      const wrap = document.createElement("label");
+      wrap.className = "field";
+      const lbl = document.createElement("span");
+      lbl.className = "field-label";
+      lbl.textContent = labelText;
+      wrap.appendChild(lbl);
+      const input = document.createElement("input");
+      input.className = "field-input";
+      input.type = type;
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    };
+
+    const nameInput = makeField("Name", "text");
+    nameInput.required = true;
     nameInput.value = task?.summary || "";
-    form.appendChild(nameInput);
 
-    const descInput = document.createElement("ha-textfield");
-    descInput.setAttribute("label", "Description");
+    const descInput = makeField("Description", "text");
     descInput.value = task?.description || "";
-    form.appendChild(descInput);
 
-    const dueInput = document.createElement("ha-textfield");
-    dueInput.setAttribute("label", "Due date");
-    dueInput.setAttribute("type", "date");
+    const dueInput = makeField("Due date", "date");
     dueInput.value = task?.due || "";
-    form.appendChild(dueInput);
 
     const fieldset = document.createElement("div");
     fieldset.className = "recurrence";
@@ -647,7 +655,7 @@ class RecurringTodosCard extends HTMLElement {
 
     const submit = async () => {
       if (!nameInput.value || !nameInput.value.trim()) {
-        nameInput.setAttribute("error", "");
+        nameInput.classList.add("invalid");
         nameInput.focus();
         return;
       }
@@ -931,8 +939,28 @@ class RecurringTodosCard extends HTMLElement {
         flex-direction: column;
         gap: 12px;
       }
-      .form ha-textfield {
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .field-label {
+        font-size: 0.85em;
+        color: var(--text-secondary);
+      }
+      .field-input {
         width: 100%;
+        padding: 8px 10px;
+        font-size: 1em;
+        color: var(--text-primary);
+        background: var(--card-background);
+        border: 1px solid var(--divider);
+        border-radius: 4px;
+        color-scheme: light dark;
+        box-sizing: border-box;
+      }
+      .field-input.invalid {
+        border-color: var(--error);
       }
       .recurrence {
         border: 1px solid var(--divider);
